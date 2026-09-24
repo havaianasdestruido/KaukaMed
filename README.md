@@ -36,6 +36,21 @@ O repositório usa **npm workspaces**: as dependências de todos os pacotes são
 instaladas a partir da raiz e os pacotes se referenciam pelos nomes
 `@kaukamed/api`, `@kaukamed/web` e `@kaukamed/shared`.
 
+### 🔗 Tipos compartilhados (`@kaukamed/shared`)
+
+`packages/shared` concentra tudo o que é contrato entre o front-end e o back-end:
+papéis de usuário (`UserRole`), status e tipos de consulta (`AppointmentStatus`,
+`AppointmentType`), formatos de autenticação (`LoginRequest`, `LoginResponse`,
+`JwtPayload`) e envelopes de resposta da API (`ApiInfo`, `ApiErrorBody`,
+`Paginated<T>`). Os rótulos exibidos na interface já ficam em pt-BR
+(ex.: `APPOINTMENT_STATUS_LABELS.SCHEDULED === 'Agendado'`).
+
+O pacote é compilado para `packages/shared/dist` e consumido pelos outros dois
+apps através do symlink do workspace — o `postinstall` da raiz já roda
+`npm run build:shared`, então basta um `npm install` para deixá-lo pronto.
+Ao alterar algo em `packages/shared`, rode `npm run build:shared` novamente
+(ou `npm run dev:shared` para ficar em modo watch).
+
 ## ✅ Pré-requisitos
 
 - **Node.js 22+** (veja [`.nvmrc`](./.nvmrc))

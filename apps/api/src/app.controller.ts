@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
+import type { ApiInfo } from '@kaukamed/shared';
 
-import { AppService, type ApiInfo } from './app.service.js';
+import { AppService } from './app.service.js';
 
 /**
  * Rota raiz da API — usada para smoke tests e para confirmar

@@ -16,10 +16,13 @@
     "dev": "concurrently --names \"api,web\" --prefix-colors cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run dev --workspace @kaukamed/api",
     "dev:web": "npm run dev --workspace @kaukamed/web",
-    "build": "npm run build --workspaces --if-present",
+    "dev:shared": "npm run dev -w @kaukamed/shared",
+    "build": "npm run build:shared && npm run build -w @kaukamed/api && npm run build -w @kaukamed/web",
+    "build:shared": "npm run build -w @kaukamed/shared",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "postinstall": "npm run build:shared"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

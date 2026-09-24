@@ -1,12 +1,5 @@
 import { Injectable } from '@nestjs/common';
-
-/** Informações básicas expostas pela rota raiz da API. */
-export interface ApiInfo {
-  name: string;
-  version: string;
-  environment: string;
-  timestamp: string;
-}
+import type { ApiInfo } from '@kaukamed/shared';
 
 @Injectable()
 export class AppService {

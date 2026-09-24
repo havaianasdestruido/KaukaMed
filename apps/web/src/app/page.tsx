@@ -1,3 +1,11 @@
+import {
+  APPOINTMENT_STATUSES,
+  APPOINTMENT_STATUS_LABELS,
+  USER_ROLE_DESCRIPTIONS,
+  USER_ROLE_LABELS,
+  USER_ROLES,
+} from '@kaukamed/shared';
+
 import styles from './page.module.css';
 
 const FASES = [
@@ -17,8 +25,8 @@ export default function Home() {
     <main className={styles.main}>
       <h1 className={styles.title}>KaukaMed</h1>
       <p className={styles.subtitle}>
-        Plataforma de gestão clínica com agendamento de consultas, prontuário eletrônico e
-        controle de convênios.
+        Plataforma de gestão clínica com agendamento de consultas, prontuário eletrônico e controle
+        de convênios.
       </p>
 
       <section className={styles.card}>
@@ -33,8 +41,32 @@ export default function Home() {
         </ul>
       </section>
 
+      <section className={styles.card}>
+        <h2 className={styles.cardTitle}>Perfis de acesso</h2>
+        <ul className={styles.list}>
+          {USER_ROLES.map((role) => (
+            <li key={role} className={styles.listItem}>
+              <span>{USER_ROLE_LABELS[role]}</span>
+              <span className={styles.description}>{USER_ROLE_DESCRIPTIONS[role]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className={styles.card}>
+        <h2 className={styles.cardTitle}>Status de uma consulta</h2>
+        <ul className={styles.inlineList}>
+          {APPOINTMENT_STATUSES.map((status) => (
+            <li key={status} className={styles.badge}>
+              {APPOINTMENT_STATUS_LABELS[status]}
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <p className={styles.footer}>
-        Front-end em Next.js (App Router) — API REST em NestJS em <code>/api/v1</code>.
+        Front-end em Next.js (App Router) — API REST em NestJS em <code>/api/v1</code>. Os rótulos
+        acima vêm do pacote compartilhado <code>@kaukamed/shared</code>.
       </p>
     </main>
   );
