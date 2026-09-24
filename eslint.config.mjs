@@ -47,6 +47,17 @@ export const baseConfig = [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Proteção extra para o pacote da API caso o ESLint seja executado a partir
+    // da raiz do monorepo: o NestJS depende de imports de valor para a injeção
+    // de dependência, então a conversão automática para `import type` fica
+    // desativada nesse pacote (o mesmo ajuste existe em apps/api/eslint.config.mjs,
+    // que é o arquivo aplicado quando o lint roda dentro do pacote).
+    files: ['**/apps/api/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
   prettier,
 ];
 

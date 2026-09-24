@@ -171,7 +171,15 @@ Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:res
   vírgula final). Rode `npm run format` antes de enviar alterações.
 - **Husky + lint-staged**: o hook `pre-commit` roda `eslint --fix` e `prettier --write`
   apenas nos arquivos modificados. Os hooks são instalados automaticamente no
-  `npm install` (script `prepare` → `husky`).
+  `npm install` (script `prepare` → `husky`). Como o ESLint resolve as regras a partir
+  do diretório de execução, `lint-staged.config.mjs` agrupa os arquivos por pacote e
+  usa `scripts/eslint-no-pacote.mjs` para rodar o lint com o `cwd` de cada app — assim
+  as regras do NestJS (`apps/api`) e do Next.js (`apps/web`) valem também no commit.
+- **NestJS + injeção de dependência**: classes injetadas (ex.: `ConfigService`) precisam
+  ser importadas como valor, nunca com `import type`, pois a metadata gerada pelo
+  `emitDecoratorMetadata` é o que permite ao Nest resolver as dependências em tempo de
+  execução. Por isso a regra `@typescript-eslint/consistent-type-imports` fica
+  desativada no pacote da API.
 
 ## 🤝 Convenções
 
