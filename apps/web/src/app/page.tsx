@@ -11,7 +11,7 @@ import { env } from '@/config/env';
 import styles from './page.module.css';
 
 const FASES = [
-  { nome: 'Phase 0 — Setup do projeto', status: 'Em andamento' },
+  { nome: 'Phase 0 — Setup do projeto', status: 'Concluída' },
   { nome: 'Phase 1 — Banco de dados & ORM', status: 'Pendente' },
   { nome: 'Phase 2 — Backend: fundação', status: 'Pendente' },
   { nome: 'Phase 3 — Backend: autenticação & autorização', status: 'Pendente' },

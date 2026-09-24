@@ -7,11 +7,18 @@
 
 ## 📋 Phase 0 — Setup do Projeto
 
-- [ ] Inicializar monorepo (ou repos separados) para `apps/web` (Next.js) e `apps/api` (NestJS)
-- [ ] Configurar TypeScript compartilhado com tipos comuns entre frontend e backend
-- [ ] Configurar ESLint + Prettier e hooks de pré-commit (Husky + lint-staged)
-- [ ] Configurar variáveis de ambiente (`.env`, `.env.example`) por ambiente
-- [ ] Configurar Docker/Docker Compose com PostgreSQL e Redis para dev local
+- [x] Inicializar monorepo (ou repos separados) para `apps/web` (Next.js) e `apps/api` (NestJS)
+- [x] Configurar TypeScript compartilhado com tipos comuns entre frontend e backend
+- [x] Configurar ESLint + Prettier e hooks de pré-commit (Husky + lint-staged)
+- [x] Configurar variáveis de ambiente (`.env`, `.env.example`) por ambiente
+- [x] Configurar Docker/Docker Compose com PostgreSQL e Redis para dev local
+
+> ✅ **Phase 0 concluída.** Entregáveis: monorepo com npm workspaces (`apps/api`,
+> `apps/web` e `packages/shared`), `tsconfig.base.json` compartilhado com tipos de
+> domínio em `@kaukamed/shared`, ESLint + Prettier + Husky/lint-staged, arquivos
+> `.env.example` por pacote com validação das variáveis da API via Zod e
+> `docker-compose.yml` com PostgreSQL 17 + Redis 8 (aplicando o schema do banco
+> automaticamente). Detalhes de setup no [`README.md`](./README.md).
 
 ## 🗄️ Phase 1 — Banco de Dados & ORM
 

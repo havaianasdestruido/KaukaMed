@@ -4,6 +4,9 @@ Plataforma de gestão clínica (agendamento de consultas, prontuário eletrônic
 planos de saúde/convênios e controle de acesso por papéis), construída a partir da
 stack definida em [`SPEC.md`](./SPEC.md) e organizada em fases no [`TODO.md`](./TODO.md).
 
+> **Status:** Phase 0 (setup do projeto) concluída — próximo passo é a Phase 1
+> (PostgreSQL + Prisma e modelagem do banco). Acompanhe em [`TODO.md`](./TODO.md).
+
 ## 🧱 Stack
 
 | Camada             | Tecnologias                             |
@@ -22,11 +25,18 @@ stack definida em [`SPEC.md`](./SPEC.md) e organizada em fases no [`TODO.md`](./
 kaukamed/
 ├── apps/
 │   ├── api/            # Backend NestJS (API REST em /api/v1)
+│   │   └── src/config/ # Validação das variáveis de ambiente (Zod)
 │   └── web/            # Frontend Next.js (App Router)
+│       └── src/config/ # Variáveis públicas do front-end
 ├── packages/
 │   └── shared/         # Tipos e contratos TypeScript compartilhados
+├── docker/
+│   └── postgres/init/  # Scripts de inicialização do PostgreSQL local
 ├── db/
 │   └── kaukamed_schema.sql
+├── .husky/pre-commit   # Hook que roda ESLint + Prettier nos arquivos alterados
+├── docker-compose.yml  # PostgreSQL + Redis para desenvolvimento
+├── eslint.config.mjs   # Regras ESLint comuns do monorepo
 ├── SPEC.md             # Stack tecnológica detalhada
 ├── TODO.md             # Plano de tarefas por fase
 └── tsconfig.base.json  # Configuração TypeScript base do monorepo
