@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.md text
+*.sql text
+*.ts text
+*.tsx text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

@@ -1,0 +1,27 @@
+{
+  "name": "kaukamed",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo da plataforma de gestão clínica KaukaMed (apps/web + apps/api).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently --names \"api,web\" --prefix-colors cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @kaukamed/api",
+    "dev:web": "npm run dev --workspace @kaukamed/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
