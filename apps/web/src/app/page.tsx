@@ -6,6 +6,8 @@ import {
   USER_ROLES,
 } from '@kaukamed/shared';
 
+import { env } from '@/config/env';
+
 import styles from './page.module.css';
 
 const FASES = [
@@ -23,7 +25,7 @@ const FASES = [
 export default function Home() {
   return (
     <main className={styles.main}>
-      <h1 className={styles.title}>KaukaMed</h1>
+      <h1 className={styles.title}>{env.appName}</h1>
       <p className={styles.subtitle}>
         Plataforma de gestão clínica com agendamento de consultas, prontuário eletrônico e controle
         de convênios.
@@ -65,8 +67,8 @@ export default function Home() {
       </section>
 
       <p className={styles.footer}>
-        Front-end em Next.js (App Router) — API REST em NestJS em <code>/api/v1</code>. Os rótulos
-        acima vêm do pacote compartilhado <code>@kaukamed/shared</code>.
+        Front-end em Next.js (App Router) — API REST em NestJS em <code>{env.apiUrl}</code>. Os
+        rótulos acima vêm do pacote compartilhado <code>@kaukamed/shared</code>.
       </p>
     </main>
   );

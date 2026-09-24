@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
+import { env } from '@/config/env';
+
 import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'KaukaMed',
-    template: '%s | KaukaMed',
+    default: env.appName,
+    template: `%s | ${env.appName}`,
   },
   description:
     'Plataforma de gestão clínica: agendamento de consultas, prontuário eletrônico e convênios.',

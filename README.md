@@ -63,15 +63,47 @@ Ao alterar algo em `packages/shared`, rode `npm run build:shared` novamente
 # 1. Instalar as dependências de todo o monorepo
 npm install
 
-# 2. Subir a infraestrutura local (PostgreSQL e Redis)
+# 2. Criar os arquivos de variáveis de ambiente a partir dos exemplos
+cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+
+# 3. Subir a infraestrutura local (PostgreSQL e Redis)
 npm run infra:up
 
-# 3. Rodar API e front-end em modo de desenvolvimento
+# 4. Rodar API e front-end em modo de desenvolvimento
 npm run dev
 ```
 
 - Front-end (Next.js): http://localhost:3000
 - API (NestJS): http://localhost:3333/api/v1
+
+### 🔐 Variáveis de ambiente
+
+| Arquivo                 | Responsabilidade                                                            |
+| :---------------------- | :-------------------------------------------------------------------------- |
+| `.env.example`          | Variáveis do Docker Compose (PostgreSQL/Redis) usadas pelos scripts da raiz |
+| `apps/api/.env.example` | API NestJS: `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `REDIS_URL`         |
+| `apps/web/.env.example` | Front-end Next.js: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_API_URL`            |
+
+Os arquivos `.env` reais **não** são versionados (veja o `.gitignore`); apenas os
+`.env.example` ficam no repositório. Ambos os lados carregam os arquivos na mesma
+ordem de prioridade — o primeiro valor encontrado vence:
+
+```
+.env.<ambiente>.local  →  .env.local  →  .env.<ambiente>  →  .env
+```
+
+Ou seja: dá para versionar os valores padrão em `.env` e sobrescrever localmente com
+`.env.development.local` (API) ou `.env.development.local`/`.env.local` (front-end),
+sem risco de commitar valores locais.
+
+Na API, todas as variáveis são validadas no bootstrap com **Zod**
+(`apps/api/src/config/env.validation.ts`): se algum valor estiver faltando ou fora do
+formato, a aplicação não sobe e o erro (em pt-BR) aponta exatamente a variável
+problemática. No front-end, as variáveis públicas são centralizadas em
+`apps/web/src/config/env.ts` — apenas chaves com prefixo `NEXT_PUBLIC_` chegam ao
+navegador, então **nunca** coloque segredos nelas.
 
 ## 📜 Scripts disponíveis
 
