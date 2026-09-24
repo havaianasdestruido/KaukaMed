@@ -1,0 +1,27 @@
+{
+  "name": "@kaukamed/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Front-end do KaukaMed (Next.js App Router + TypeScript).",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev --hostname 0.0.0.0",
+    "start": "next start --hostname 0.0.0.0",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kaukamed/shared": "*",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint-config-next": "^16.3.6",
+    "typescript": "^6.0.2"
+  }
+}

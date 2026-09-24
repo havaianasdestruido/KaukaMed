@@ -1,0 +1,48 @@
+{
+  "name": "kaukamed",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo da plataforma de gestão clínica KaukaMed (apps/web + apps/api).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently --names \"api,web\" --prefix-colors cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @kaukamed/api",
+    "dev:web": "npm run dev --workspace @kaukamed/web",
+    "dev:shared": "npm run dev -w @kaukamed/shared",
+    "build": "npm run build:shared && npm run build -w @kaukamed/api && npm run build -w @kaukamed/web",
+    "build:shared": "npm run build -w @kaukamed/shared",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "infra:reset": "docker compose down -v",
+    "db:psql": "docker compose exec postgres psql -U kaukamed -d kaukamed",
+    "db:redis": "docker compose exec redis redis-cli",
+    "postinstall": "npm run build:shared",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "prettier": "^3.9.9",
+    "typescript-eslint": "^8.70.1"
+  }
+}

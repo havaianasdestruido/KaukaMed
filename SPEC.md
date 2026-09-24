@@ -12,11 +12,11 @@ Abaixo estão os links para o detalhamento completo de cada camada do sistema:
 
 ## Resumo Geral da Stack
 
-| Camada | Tecnologias Principais |
-| :--- | :--- |
-| **Frontend** | Next.js (React), TypeScript, Tailwind CSS, Shadcn/UI, React Hook Form, Zod, TanStack Query |
-| **Backend** | Node.js, NestJS / Fastify, TypeScript, Prisma ORM, JWT, OpenAPI / Swagger |
-| **Banco de Dados** | PostgreSQL, Redis, Prisma Migrations |
+| Camada             | Tecnologias Principais                                                                     |
+| :----------------- | :----------------------------------------------------------------------------------------- |
+| **Frontend**       | Next.js (React), TypeScript, Tailwind CSS, Shadcn/UI, React Hook Form, Zod, TanStack Query |
+| **Backend**        | Node.js, NestJS / Fastify, TypeScript, Prisma ORM, JWT, OpenAPI / Swagger                  |
+| **Banco de Dados** | PostgreSQL, Redis, Prisma Migrations                                                       |
 
 ---
 
@@ -28,23 +28,23 @@ Documentação detalhada das tecnologias e ferramentas utilizadas na camada de F
 
 ## 🛠️ Tecnologias Principais
 
-| Tecnologia | Função / Descrição |
-| :--- | :--- |
-| **Next.js (React)** | Framework React com suporte a Server-Side Rendering (SSR), Static Site Generation (SSG) e App Router para alta performance e SEO. |
-| **TypeScript** | Superset JavaScript que adiciona tipagem estática, garantindo maior segurança e facilidade de manutenção no código. |
-| **Tailwind CSS** | Framework CSS utilitário para estilização ágil, responsiva e customizável. |
-| **Shadcn/UI & Radix UI** | Biblioteca de componentes acessíveis e customizáveis baseados em Tailwind CSS. |
+| Tecnologia               | Função / Descrição                                                                                                                |
+| :----------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| **Next.js (React)**      | Framework React com suporte a Server-Side Rendering (SSR), Static Site Generation (SSG) e App Router para alta performance e SEO. |
+| **TypeScript**           | Superset JavaScript que adiciona tipagem estática, garantindo maior segurança e facilidade de manutenção no código.               |
+| **Tailwind CSS**         | Framework CSS utilitário para estilização ágil, responsiva e customizável.                                                        |
+| **Shadcn/UI & Radix UI** | Biblioteca de componentes acessíveis e customizáveis baseados em Tailwind CSS.                                                    |
 
 ---
 
 ## 📦 Gerenciamento de Estado e Formulários
 
-| Ferramenta | Utilização |
-| :--- | :--- |
-| **TanStack Query (React Query)** | Gerenciamento de estado assíncrono, cache de dados e sincronização com a API backend. |
-| **Zustand** | Gerenciamento de estado global leve para armazenar dados da sessão do usuário e preferências da interface. |
-| **React Hook Form** | Manipulação e controle de performance em formulários. |
-| **Zod** | Validação de esquemas e tipos em conjunto com o React Hook Form. |
+| Ferramenta                       | Utilização                                                                                                 |
+| :------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| **TanStack Query (React Query)** | Gerenciamento de estado assíncrono, cache de dados e sincronização com a API backend.                      |
+| **Zustand**                      | Gerenciamento de estado global leve para armazenar dados da sessão do usuário e preferências da interface. |
+| **React Hook Form**              | Manipulação e controle de performance em formulários.                                                      |
+| **Zod**                          | Validação de esquemas e tipos em conjunto com o React Hook Form.                                           |
 
 ---
 
@@ -73,32 +73,33 @@ Documentação detalhada das tecnologias de armazenamento, persitência e gerenc
 
 ## 🛠️ Banco de Dados Relacional (SGBD)
 
-| Tecnologia | Função / Descrição |
-| :--- | :--- |
+| Tecnologia     | Função / Descrição                                                                                                                                                                          |
+| :------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **PostgreSQL** | Sistema Gerenciador de Banco de Dados Relacional (SGBD) principal, escolhido por sua confiabilidade, consistência ACID e suporte avançado a dados estruturados e semi-estruturados (JSONB). |
 
 ---
 
 ## 🔄 ORM e Migrações
 
-| Ferramenta | Função / Descrição |
-| :--- | :--- |
-| **Prisma ORM** | Object-Relational Mapping (ORM) moderno para Node.js/TypeScript. Proporciona consultas type-safe, gerenciamento de esquemas declarativos e migrações automatizadas. |
-| **Prisma Migrations** | Controle de versão do esquema do banco de dados relacional. |
+| Ferramenta            | Função / Descrição                                                                                                                                                  |
+| :-------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Prisma ORM**        | Object-Relational Mapping (ORM) moderno para Node.js/TypeScript. Proporciona consultas type-safe, gerenciamento de esquemas declarativos e migrações automatizadas. |
+| **Prisma Migrations** | Controle de versão do esquema do banco de dados relacional.                                                                                                         |
 
 ---
 
 ## ⚡ Caching e Sessões (In-Memory)
 
-| Tecnologia | Função / Descrição |
-| :--- | :--- |
-| **Redis** | Armazenamento chave-valor em memória para gerenciamento de sessões, cache de dados frequentemente acessados (como horários disponíveis de médicos) e controle de taxa de requisições (rate limiting). |
+| Tecnologia | Função / Descrição                                                                                                                                                                                    |
+| :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Redis**  | Armazenamento chave-valor em memória para gerenciamento de sessões, cache de dados frequentemente acessados (como horários disponíveis de médicos) e controle de taxa de requisições (rate limiting). |
 
 ---
 
 ## 📊 Modelagem Principal de Dados
 
 O banco de dados relacional gerencia as seguintes entidades e relacionamentos principais:
+
 - **Usuários & Perfis**: Autenticação unificada com papéis (`PATIENT`, `EMPLOYEE`, `DOCTOR`, `ADMIN`).
 - **Médicos & Especialidades**: Vinculação entre profissionais de saúde e suas respectivas especialidades e locais de atendimento.
 - **Consultas & Agendamentos**: Registro completo do ciclo de vida dos agendamentos (status: agendado, confirmado, finalizado, cancelado).
@@ -115,11 +116,11 @@ Documentação detalhada das tecnologias e ferramentas utilizadas na camada de B
 
 ## 🛠️ Tecnologias Principais
 
-| Tecnologia | Função / Descrição |
-| :--- | :--- |
-| **Node.js** | Ambiente de execução JavaScript server-side. |
+| Tecnologia                     | Função / Descrição                                                                                                                        |
+| :----------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Node.js**                    | Ambiente de execução JavaScript server-side.                                                                                              |
 | **NestJS / Fastify / Express** | Framework Node.js estruturado em arquitetura modular, com suporte nativo a TypeScript, Injeção de Dependência e facilidade de manutenção. |
-| **TypeScript** | Linguagem principal do backend, assegurando tipagem estática ponta a ponta. |
+| **TypeScript**                 | Linguagem principal do backend, assegurando tipagem estática ponta a ponta.                                                               |
 
 ---
 
