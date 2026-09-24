@@ -37,15 +37,17 @@ export const APPOINTMENT_FINAL_STATUSES: readonly AppointmentStatus[] = [
  * SCHEDULED -> CONFIRMED -> IN_PROGRESS -> COMPLETED
  *         \\-> CANCELLED / NO_SHOW (a partir de SCHEDULED ou CONFIRMED)
  */
-export const APPOINTMENT_STATUS_TRANSITIONS: Record<AppointmentStatus, readonly AppointmentStatus[]> =
-  {
-    SCHEDULED: ['CONFIRMED', 'CANCELLED', 'NO_SHOW'],
-    CONFIRMED: ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'],
-    IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
-    COMPLETED: [],
-    CANCELLED: [],
-    NO_SHOW: [],
-  };
+export const APPOINTMENT_STATUS_TRANSITIONS: Record<
+  AppointmentStatus,
+  readonly AppointmentStatus[]
+> = {
+  SCHEDULED: ['CONFIRMED', 'CANCELLED', 'NO_SHOW'],
+  CONFIRMED: ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'],
+  IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
+  CANCELLED: [],
+  NO_SHOW: [],
+};
 
 /** Indica se a mudança de status é permitida pelas regras de negócio. */
 export function canTransitionAppointmentStatus(

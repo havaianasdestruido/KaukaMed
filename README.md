@@ -6,12 +6,12 @@ stack definida em [`SPEC.md`](./SPEC.md) e organizada em fases no [`TODO.md`](./
 
 ## 🧱 Stack
 
-| Camada | Tecnologias |
-| :--- | :--- |
-| **Frontend** | Next.js (App Router), React, TypeScript |
-| **Backend** | Node.js, NestJS, TypeScript |
-| **Banco de dados** | PostgreSQL (Prisma ORM) e Redis |
-| **Qualidade** | ESLint, Prettier, Husky + lint-staged |
+| Camada             | Tecnologias                             |
+| :----------------- | :-------------------------------------- |
+| **Frontend**       | Next.js (App Router), React, TypeScript |
+| **Backend**        | Node.js, NestJS, TypeScript             |
+| **Banco de dados** | PostgreSQL (Prisma ORM) e Redis         |
+| **Qualidade**      | ESLint, Prettier, Husky + lint-staged   |
 
 > Consulte o [`SPEC.md`](./SPEC.md) para o detalhamento de cada tecnologia e o
 > schema do banco em [`db/kaukamed_schema.sql`](./db/kaukamed_schema.sql).
@@ -75,17 +75,29 @@ npm run dev
 
 ## 📜 Scripts disponíveis
 
-| Comando | Descrição |
-| :--- | :--- |
-| `npm run dev` | Sobe API e front-end em modo watch (paralelo) |
-| `npm run dev:api` | Sobe apenas a API NestJS |
-| `npm run dev:web` | Sobe apenas o front-end Next.js |
-| `npm run build` | Compila todos os pacotes em ordem de dependência |
-| `npm run typecheck` | Valida os tipos TypeScript de todos os pacotes |
-| `npm run lint` | Executa o ESLint em todos os pacotes |
-| `npm run format` | Formata o código com Prettier |
-| `npm run test` | Executa os testes de todos os pacotes |
+| Comando                                   | Descrição                                          |
+| :---------------------------------------- | :------------------------------------------------- |
+| `npm run dev`                             | Sobe API e front-end em modo watch (paralelo)      |
+| `npm run dev:api`                         | Sobe apenas a API NestJS                           |
+| `npm run dev:web`                         | Sobe apenas o front-end Next.js                    |
+| `npm run build`                           | Compila todos os pacotes em ordem de dependência   |
+| `npm run typecheck`                       | Valida os tipos TypeScript de todos os pacotes     |
+| `npm run lint`                            | Executa o ESLint em todos os pacotes               |
+| `npm run lint:fix`                        | Executa o ESLint com correção automática           |
+| `npm run format` / `npm run format:check` | Formata/valida a formatação com Prettier           |
+| `npm run test`                            | Executa os testes de todos os pacotes              |
 | `npm run infra:up` / `npm run infra:down` | Sobe/derruba o Docker Compose (PostgreSQL + Redis) |
+
+## 🧹 Qualidade de código
+
+- **ESLint (flat config)**: `eslint.config.mjs` na raiz define as regras comuns do
+  monorepo e cada app estende essa base — `apps/api/eslint.config.mjs` (ambiente Node)
+  e `apps/web/eslint.config.mjs` (regras do Next.js/Core Web Vitals).
+- **Prettier**: configuração única em `.prettierrc.json` (100 colunas, aspas simples,
+  vírgula final). Rode `npm run format` antes de enviar alterações.
+- **Husky + lint-staged**: o hook `pre-commit` roda `eslint --fix` e `prettier --write`
+  apenas nos arquivos modificados. Os hooks são instalados automaticamente no
+  `npm install` (script `prepare` → `husky`).
 
 ## 🤝 Convenções
 
