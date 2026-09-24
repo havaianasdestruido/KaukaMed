@@ -119,6 +119,38 @@ navegador, então **nunca** coloque segredos nelas.
 | `npm run format` / `npm run format:check` | Formata/valida a formatação com Prettier           |
 | `npm run test`                            | Executa os testes de todos os pacotes              |
 | `npm run infra:up` / `npm run infra:down` | Sobe/derruba o Docker Compose (PostgreSQL + Redis) |
+| `npm run infra:logs`                      | Acompanha os logs dos contêineres                  |
+| `npm run infra:reset`                     | Derruba a infraestrutura e apaga os volumes        |
+| `npm run db:psql` / `npm run db:redis`    | Abre o `psql`/`redis-cli` no contêiner             |
+
+## 🐳 Infraestrutura local (Docker Compose)
+
+O `docker-compose.yml` da raiz sobe apenas as dependências de infraestrutura —
+a API e o front-end rodam direto na máquina (`npm run dev`), o que deixa o ciclo
+de desenvolvimento mais rápido.
+
+| Serviço    | Imagem               | Porta padrão | Volume                   |
+| :--------- | :------------------- | :----------- | :----------------------- |
+| `postgres` | `postgres:17-alpine` | `5432`       | `kaukamed-postgres-data` |
+| `redis`    | `redis:8-alpine`     | `6379`       | `kaukamed-redis-data`    |
+
+Na **primeira subida** (volume vazio), o PostgreSQL executa os scripts montados em
+`/docker-entrypoint-initdb.d`, nesta ordem:
+
+1. `docker/postgres/init/00-supabase-compat.sql` — camada de compatibilidade com o
+   Supabase (schema `auth`, `auth.users`, funções `auth.uid()`/`auth.jwt()`/`auth.role()`
+   e papéis `anon`, `authenticated` e `service_role`). Necessária porque
+   `db/kaukamed_schema.sql` foi escrito para o Supabase e referencia esses objetos.
+2. `db/kaukamed_schema.sql` — schema do KaukaMed (tabelas, enums, índices, políticas
+   de RLS e seed de especialidades).
+
+Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:reset`
+(apaga os volumes) e `npm run infra:up` novamente.
+
+> **RLS em desenvolvimento:** a API se conecta como o usuário dono do banco
+> (`kaukamed`), que ignora as políticas de RLS — elas valem para os papéis
+> `anon`/`authenticated` (o caso do acesso direto pelo cliente Supabase). A
+> autorização por papel na API é responsabilidade dos Guards (Phase 3).
 
 ## 🧹 Qualidade de código
 

@@ -1,0 +1,65 @@
+# ============================================================================
+# KaukaMed — infraestrutura de desenvolvimento local (PostgreSQL + Redis)
+#
+# Uso:
+#   cp .env.example .env      # variáveis de usuário/senha/portas
+#   npm run infra:up          # sobe PostgreSQL e Redis em background
+#   npm run infra:logs        # acompanha os logs
+#   npm run infra:down        # derruba os serviços (mantém os dados)
+#   npm run infra:reset       # derruba e apaga os volumes (recria o banco do zero)
+#
+# Na primeira subida (volume vazio), o PostgreSQL executa, em ordem alfabética,
+# os scripts montados em /docker-entrypoint-initdb.d:
+#   00-supabase-compat.sql  -> schema `auth`, funções e papéis equivalentes ao Supabase
+#   01-kaukamed-schema.sql  -> schema do KaukaMed (db/kaukamed_schema.sql)
+# ============================================================================
+name: kaukamed
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: kaukamed-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kaukamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kaukamed}
+      POSTGRES_DB: ${POSTGRES_DB:-kaukamed}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8'
+      # Fuso usado pelas datas do banco (a aplicação trabalha com UTC e converte na exibição)
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init/00-supabase-compat.sql:/docker-entrypoint-initdb.d/00-supabase-compat.sql:ro
+      - ./db/kaukamed_schema.sql:/docker-entrypoint-initdb.d/01-kaukamed-schema.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-kaukamed} -d ${POSTGRES_DB:-kaukamed}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    container_name: kaukamed-redis
+    restart: unless-stopped
+    # appendonly: persistência das chaves (sessões, cache e rate limiting)
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres-data:
+    name: kaukamed-postgres-data
+  redis-data:
+    name: kaukamed-redis-data

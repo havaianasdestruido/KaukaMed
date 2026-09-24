@@ -25,6 +25,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f",
+    "infra:reset": "docker compose down -v",
+    "db:psql": "docker compose exec postgres psql -U kaukamed -d kaukamed",
+    "db:redis": "docker compose exec redis redis-cli",
     "postinstall": "npm run build:shared",
     "prepare": "husky"
   },
