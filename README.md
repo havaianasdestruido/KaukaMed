@@ -9,12 +9,12 @@ stack definida em [`SPEC.md`](./SPEC.md) e organizada em fases no [`TODO.md`](./
 
 ## 🧱 Stack
 
-| Camada             | Tecnologias                             |
-| :----------------- | :-------------------------------------- |
-| **Frontend**       | Next.js (App Router), React, TypeScript |
-| **Backend**        | Node.js, NestJS, TypeScript             |
-| **Banco de dados** | PostgreSQL (Prisma ORM) e Redis         |
-| **Qualidade**      | ESLint, Prettier, Husky + lint-staged   |
+| Camada             | Tecnologias                            |
+| :----------------- | :------------------------------------- |
+| **Frontend**       | Vite, React 19, TypeScript, Tailwind 4 |
+| **Backend**        | Node.js, NestJS, TypeScript            |
+| **Banco de dados** | PostgreSQL (Prisma ORM) e Redis        |
+| **Qualidade**      | ESLint, Prettier, Husky + lint-staged  |
 
 > Consulte o [`SPEC.md`](./SPEC.md) para o detalhamento de cada tecnologia e o
 > schema do banco em [`db/kaukamed_schema.sql`](./db/kaukamed_schema.sql).
@@ -26,8 +26,9 @@ kaukamed/
 ├── apps/
 │   ├── api/            # Backend NestJS (API REST em /api/v1)
 │   │   └── src/config/ # Validação das variáveis de ambiente (Zod)
-│   └── web/            # Frontend Next.js (App Router)
-│       └── src/config/ # Variáveis públicas do front-end
+│   └── web/            # Frontend Vite + React (telas OdontoAura) — ver docs/FRONTEND.md
+│       ├── src/lib/      # env + cliente Supabase
+│       └── src/services/ # Acesso a dados (auth, agendamentos, corpo clínico)
 ├── packages/
 │   └── shared/         # Tipos e contratos TypeScript compartilhados
 ├── docker/
@@ -85,16 +86,16 @@ npm run infra:up
 npm run dev
 ```
 
-- Front-end (Next.js): http://localhost:3000
+- Front-end (Vite): http://localhost:3000
 - API (NestJS): http://localhost:3333/api/v1
 
 ### 🔐 Variáveis de ambiente
 
-| Arquivo                 | Responsabilidade                                                            |
-| :---------------------- | :-------------------------------------------------------------------------- |
-| `.env.example`          | Variáveis do Docker Compose (PostgreSQL/Redis) usadas pelos scripts da raiz |
-| `apps/api/.env.example` | API NestJS: `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `REDIS_URL`         |
-| `apps/web/.env.example` | Front-end Next.js: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_API_URL`            |
+| Arquivo                 | Responsabilidade                                                                |
+| :---------------------- | :------------------------------------------------------------------------------ |
+| `.env.example`          | Variáveis do Docker Compose (PostgreSQL/Redis) usadas pelos scripts da raiz     |
+| `apps/api/.env.example` | API NestJS: `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `REDIS_URL`             |
+| `apps/web/.env.example` | Front-end Vite: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_BASE_PATH` |
 
 Os arquivos `.env` reais **não** são versionados (veja o `.gitignore`); apenas os
 `.env.example` ficam no repositório. Ambos os lados carregam os arquivos na mesma
@@ -112,8 +113,13 @@ Na API, todas as variáveis são validadas no bootstrap com **Zod**
 (`apps/api/src/config/env.validation.ts`): se algum valor estiver faltando ou fora do
 formato, a aplicação não sobe e o erro (em pt-BR) aponta exatamente a variável
 problemática. No front-end, as variáveis públicas são centralizadas em
-`apps/web/src/config/env.ts` — apenas chaves com prefixo `NEXT_PUBLIC_` chegam ao
-navegador, então **nunca** coloque segredos nelas.
+`apps/web/src/lib/env.ts` — apenas chaves com prefixo `VITE_` chegam ao
+navegador, então **nunca** coloque segredos nelas. Sem as variáveis do Supabase o
+front-end sobe em **modo demonstração** (dados de exemplo).
+
+> Antes de usar o front-end com o Supabase, aplique também
+> [`db/migrations/001_frontend_support.sql`](./db/migrations/001_frontend_support.sql).
+> Detalhes em [`docs/FRONTEND.md`](./docs/FRONTEND.md).
 
 ## 📜 Scripts disponíveis
 
@@ -121,7 +127,7 @@ navegador, então **nunca** coloque segredos nelas.
 | :---------------------------------------- | :------------------------------------------------- |
 | `npm run dev`                             | Sobe API e front-end em modo watch (paralelo)      |
 | `npm run dev:api`                         | Sobe apenas a API NestJS                           |
-| `npm run dev:web`                         | Sobe apenas o front-end Next.js                    |
+| `npm run dev:web`                         | Sobe apenas o front-end (Vite)                     |
 | `npm run build`                           | Compila todos os pacotes em ordem de dependência   |
 | `npm run typecheck`                       | Valida os tipos TypeScript de todos os pacotes     |
 | `npm run lint`                            | Executa o ESLint em todos os pacotes               |
@@ -166,7 +172,7 @@ Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:res
 
 - **ESLint (flat config)**: `eslint.config.mjs` na raiz define as regras comuns do
   monorepo e cada app estende essa base — `apps/api/eslint.config.mjs` (ambiente Node)
-  e `apps/web/eslint.config.mjs` (regras do Next.js/Core Web Vitals).
+  e `apps/web/eslint.config.mjs` (front-end React/Vite, globais de navegador).
 - **Prettier**: configuração única em `.prettierrc.json` (100 colunas, aspas simples,
   vírgula final). Rode `npm run format` antes de enviar alterações.
 - **Husky + lint-staged**: o hook `pre-commit` roda `eslint --fix` e `prettier --write`
@@ -174,7 +180,7 @@ Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:res
   `npm install` (script `prepare` → `husky`). Como o ESLint resolve as regras a partir
   do diretório de execução, `lint-staged.config.mjs` agrupa os arquivos por pacote e
   usa `scripts/eslint-no-pacote.mjs` para rodar o lint com o `cwd` de cada app — assim
-  as regras do NestJS (`apps/api`) e do Next.js (`apps/web`) valem também no commit.
+  as regras do NestJS (`apps/api`) e do front-end (`apps/web`) valem também no commit.
 - **NestJS + injeção de dependência**: classes injetadas (ex.: `ConfigService`) precisam
   ser importadas como valor, nunca com `import type`, pois a metadata gerada pelo
   `emitDecoratorMetadata` é o que permite ao Nest resolver as dependências em tempo de
