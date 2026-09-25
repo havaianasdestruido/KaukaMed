@@ -1,6 +1,7 @@
 import { type Appointment, type UserProfile } from '../types';
 import { requireSupabase } from '../lib/supabase';
 import { appointmentFromRow, parseLongDate, type AppointmentRow } from './mappers';
+import { getDoctorPublicProfiles } from './doctorPublicProfiles';
 
 /**
  * Agendamentos (tabela `appointments`).
@@ -11,7 +12,7 @@ import { appointmentFromRow, parseLongDate, type AppointmentRow } from './mapper
 
 const APPOINTMENT_SELECT = `
   id, status, type, scheduled_start, scheduled_end, price, notes,
-  doctor:doctors(id, crm, profile:profiles(full_name), specialty:specialties(name)),
+  doctor:doctors(id, crm, specialty:specialties(name)),
   location:locations(name, address),
   insurance:patient_insurances(card_number, insurance:health_insurances(name))
 `;
@@ -26,7 +27,13 @@ export async function listAppointments(): Promise<Appointment[]> {
     .returns<AppointmentRow[]>();
 
   if (error) throw error;
-  return (data ?? []).map(appointmentFromRow);
+  const profiles = await getDoctorPublicProfiles();
+  return (data ?? []).map((row) =>
+    appointmentFromRow({
+      ...row,
+      doctor: row.doctor ? { ...row.doctor, profile: profiles.get(row.doctor.id) ?? null } : null,
+    }),
+  );
 }
 
 export interface CreateAppointmentInput {
@@ -39,22 +46,25 @@ export interface CreateAppointmentInput {
   procedure?: string;
   notes?: string;
   durationMinutes?: number;
+  modality?: Appointment['modality'];
 }
 
-/** Descobre o médico pelo id ou nome (fallback: primeiro médico ativo). */
-async function resolveDoctor(
-  input: CreateAppointmentInput,
-): Promise<{ id: string; location_id: string | null; consultation_price: number | null }> {
+/** Descobre o médico pelo id ou nome; só usa o primeiro quando não há escolha. */
+async function resolveDoctor(input: CreateAppointmentInput): Promise<{
+  id: string;
+  location_id: string | null;
+  consultation_price: number | null;
+  full_name: string;
+}> {
   const sb = requireSupabase();
   const { data, error } = await sb
     .from('doctors')
-    .select('id, location_id, consultation_price, profile:profiles(full_name)')
+    .select('id, location_id, consultation_price')
     .returns<
       {
         id: string;
         location_id: string | null;
         consultation_price: number | null;
-        profile: { full_name: string } | null;
       }[]
     >();
   if (error) throw error;
@@ -62,12 +72,14 @@ async function resolveDoctor(
     throw new Error('Nenhum profissional cadastrado no sistema para receber agendamentos.');
   }
 
+  const profiles = await getDoctorPublicProfiles();
   const wanted = input.doctorName?.toLowerCase().replace(/^dra?\.\s*/, '');
   const found =
     (input.doctorId && data.find((d) => d.id === input.doctorId)) ||
-    (wanted && data.find((d) => d.profile?.full_name.toLowerCase().includes(wanted))) ||
-    data[0]!;
-  return found;
+    (wanted && data.find((d) => profiles.get(d.id)?.full_name.toLowerCase().includes(wanted))) ||
+    (!input.doctorId && !input.doctorName ? data[0] : undefined);
+  if (!found) throw new Error('O profissional selecionado não foi encontrado.');
+  return { ...found, full_name: profiles.get(found.id)?.full_name ?? 'Profissional' };
 }
 
 export async function createAppointment(input: CreateAppointmentInput): Promise<Appointment> {
@@ -99,7 +111,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
       doctor_id: doctor.id,
       location_id: doctor.location_id,
       insurance_id: insurance?.id ?? null,
-      type: 'FIRST_VISIT',
+      type: input.modality === 'teleorientacao' ? 'TELEMEDICINE' : 'FIRST_VISIT',
       status: 'SCHEDULED',
       scheduled_start: start.toISOString(),
       scheduled_end: end.toISOString(),
@@ -111,7 +123,10 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
     .single<AppointmentRow>();
 
   if (error) throw error;
-  return appointmentFromRow(data);
+  return appointmentFromRow({
+    ...data,
+    doctor: data.doctor ? { ...data.doctor, profile: { full_name: doctor.full_name } } : null,
+  });
 }
 
 export async function rescheduleAppointment(
@@ -136,18 +151,25 @@ export async function rescheduleAppointment(
     .single<AppointmentRow>();
 
   if (error) throw error;
-  return appointmentFromRow(data);
+  const profiles = await getDoctorPublicProfiles();
+  return appointmentFromRow({
+    ...data,
+    doctor: data.doctor ? { ...data.doctor, profile: profiles.get(data.doctor.id) ?? null } : null,
+  });
 }
 
 export async function cancelAppointment(id: string, reason?: string): Promise<void> {
-  const { error } = await requireSupabase()
+  const { data, error } = await requireSupabase()
     .from('appointments')
     .update({
       status: 'CANCELLED',
       cancelled_at: new Date().toISOString(),
       cancel_reason: reason ?? 'Cancelado pelo portal',
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .maybeSingle<{ id: string }>();
 
   if (error) throw error;
+  if (!data) throw new Error('A consulta não foi encontrada ou não pôde ser cancelada.');
 }

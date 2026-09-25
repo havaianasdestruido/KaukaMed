@@ -41,13 +41,37 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ----------------------------------------------------------------------------
--- 2. Perfis de médicos visíveis para qualquer usuário autenticado
---    (necessário para listar o corpo clínico e exibir o médico da consulta)
+-- 2. Somente nome e estado dos médicos são públicos para usuários autenticados.
+--    A view é criada pelo proprietário da migration para consultar profiles
+--    sem abrir as demais colunas pela policy de SELECT da tabela base.
 -- ----------------------------------------------------------------------------
 drop policy if exists profiles_select_doctors on profiles;
-create policy profiles_select_doctors on profiles for select
-  to authenticated
-  using (role = 'DOCTOR');
+
+create or replace view public.doctor_public_profiles
+with (security_barrier = true) as
+select d.id, p.full_name, p.is_active
+from public.doctors d
+join public.profiles p on p.id = d.id
+where p.role = 'DOCTOR';
+
+revoke all on public.doctor_public_profiles from public, anon;
+grant select on public.doctor_public_profiles to authenticated;
+
+-- A policy base permite atualizar o próprio perfil. Impedir promoção do
+-- próprio papel evita que um paciente vire staff e leia profiles diretamente.
+create or replace function public.guard_profile_role_update()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if auth.uid() is not null and not public.is_staff() and new.role is distinct from old.role then
+    raise exception 'Somente a equipe pode alterar o papel de um perfil';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_profiles_role_guard on public.profiles;
+create trigger trg_profiles_role_guard
+  before update on public.profiles
+  for each row execute function public.guard_profile_role_update();
 
 -- ----------------------------------------------------------------------------
 -- 3. Paciente pode atualizar (cancelar/reagendar) as próprias consultas
@@ -58,6 +82,26 @@ create policy appointments_update_patient on appointments for update
   to authenticated
   using (patient_id = auth.uid() and status in ('SCHEDULED', 'CONFIRMED'))
   with check (patient_id = auth.uid() and status in ('SCHEDULED', 'CONFIRMED', 'CANCELLED'));
+
+-- RLS limita as linhas; este trigger limita as colunas alteráveis por pacientes.
+-- O nome do trigger o executa antes de trg_appointments_updated, que mantém updated_at.
+create or replace function public.guard_patient_appointment_update()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if old.patient_id = auth.uid() and not public.is_staff() and
+     (to_jsonb(new) - array['scheduled_start', 'scheduled_end', 'status',
+                            'cancelled_at', 'cancel_reason']) is distinct from
+     (to_jsonb(old) - array['scheduled_start', 'scheduled_end', 'status',
+                            'cancelled_at', 'cancel_reason']) then
+    raise exception 'Pacientes só podem alterar horário e dados de cancelamento da consulta';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_appointments_patient_guard on public.appointments;
+create trigger trg_appointments_patient_guard
+  before update on public.appointments
+  for each row execute function public.guard_patient_appointment_update();
 
 -- ----------------------------------------------------------------------------
 -- 4. Catálogos com leitura pública e escrita só para staff

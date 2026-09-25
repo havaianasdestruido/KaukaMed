@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useDialogFocus } from './useDialogFocus';
 
 export const AiAuditModal: React.FC = () => {
-  const { showAiAuditModal, setShowAiAuditModal, resolveGlosa, convertToPrivate, addToast } =
-    useApp();
+  const {
+    showAiAuditModal,
+    setShowAiAuditModal,
+    tissGuides,
+    resolveGlosa,
+    convertToPrivate,
+    addToast,
+  } = useApp();
+  const dialogRef = useDialogFocus(showAiAuditModal, () => setShowAiAuditModal(false));
   const [scanning, setScanning] = useState(false);
   const [, setAnalyzed] = useState(false);
 
@@ -19,15 +27,26 @@ export const AiAuditModal: React.FC = () => {
   };
 
   const handleFixAll = () => {
-    resolveGlosa('tiss-g-1');
-    convertToPrivate('tiss-g-4');
+    const preventive = tissGuides.filter((guide) => guide.status === 'glosa_preventiva');
+    const definitive = tissGuides.filter((guide) => guide.status === 'glosa_ans_definitiva');
+    preventive.forEach((guide) => resolveGlosa(guide.id, false));
+    definitive.forEach((guide) => convertToPrivate(guide.id, false));
     setShowAiAuditModal(false);
-    addToast('Todas as pendências foram tratadas com sucesso pela IA!', 'success');
+    if (preventive.length + definitive.length > 0) {
+      addToast('Todas as pendências foram tratadas com sucesso pela IA!', 'success');
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl flex flex-col gap-5">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-audit-title"
+        tabIndex={-1}
+        className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl flex flex-col gap-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#dde4e3] dark:border-[#263131]">
           <div className="flex items-center gap-3">
@@ -36,7 +55,10 @@ export const AiAuditModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
+                <h2
+                  id="ai-audit-title"
+                  className="text-base font-bold text-[#161d1d] dark:text-white"
+                >
                   Auditoria Preditiva de Guias TISS
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-[10px] font-bold">
@@ -50,6 +72,8 @@ export const AiAuditModal: React.FC = () => {
           </div>
           <button
             onClick={() => setShowAiAuditModal(false)}
+            type="button"
+            aria-label="Fechar auditoria de guias"
             className="w-8 h-8 rounded-full hover:bg-[#e8efee] dark:hover:bg-[#202929] flex items-center justify-center text-[#6e7979]"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>

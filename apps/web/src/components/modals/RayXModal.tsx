@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
+import { useDialogFocus } from './useDialogFocus';
 
 export const RayXModal: React.FC = () => {
   const { showRayXModal, setShowRayXModal, addToast } = useApp();
+  const dialogRef = useDialogFocus(showRayXModal, () => setShowRayXModal(false));
 
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isInverted, setIsInverted] = useState(false);
@@ -14,7 +16,14 @@ export const RayXModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-[#141b1b] border border-neutral-800 text-white rounded-3xl max-w-5xl w-full h-[90vh] max-h-[800px] flex flex-col overflow-hidden shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ray-x-title"
+        tabIndex={-1}
+        className="bg-[#141b1b] border border-neutral-800 text-white rounded-3xl max-w-5xl w-full h-[90vh] max-h-[800px] flex flex-col overflow-hidden shadow-2xl"
+      >
         {/* Top Control Bar */}
         <div className="px-6 py-4 bg-[#1a2222] border-b border-neutral-800 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -22,11 +31,12 @@ export const RayXModal: React.FC = () => {
               <span className="material-symbols-outlined text-[24px]">radiology</span>
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h2 id="ray-x-title" className="text-base font-bold text-white">
                 Visualizador Radiológico OdontoAura PACS
               </h2>
               <p className="text-xs text-neutral-400">
-                Radiografia Panorâmica Digital • Exame #RX-88412 • Paciente: Camila Santos
+                Exame demonstrativo #RX-88412 • Dados clínicos fictícios, sem vínculo com o paciente
+                conectado
               </p>
             </div>
           </div>
@@ -91,6 +101,8 @@ export const RayXModal: React.FC = () => {
 
             <button
               onClick={() => setShowRayXModal(false)}
+              type="button"
+              aria-label="Fechar visualizador radiológico"
               className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white flex items-center justify-center"
             >
               <span className="material-symbols-outlined text-[20px]">close</span>

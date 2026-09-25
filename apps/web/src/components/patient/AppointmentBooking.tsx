@@ -13,6 +13,7 @@ export const AppointmentBooking: React.FC = () => {
   });
   const [selectedTime, setSelectedTime] = useState<string>('14:30');
   const [symptoms, setSymptoms] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const days = [
     {
@@ -80,23 +81,32 @@ export const AppointmentBooking: React.FC = () => {
     { time: '18:45', available: true },
   ];
 
-  const handleConfirmAppointment = () => {
-    addAppointment({
-      date: selectedDay.dateString,
-      time: selectedTime,
-      doctorName: 'Dr. Marcelo Arantes',
-      doctorSpecialty: 'Ortodontia & Alinhadores',
-      doctorCro: 'CRO/SP 89.412',
-      doctorAvatar: ASSETS.drMarcelo,
-      room: 'Consultório 03 - Unidade Jardins',
-      unit: 'OdontoAura Unidade Jardins',
-      procedure: 'Avaliação & Manutenção Ortodôntica',
-      insuranceName: 'Unimed Odonto Master Gold',
-      insuranceCoverage: '100% Coberto',
-      copayAmount: 0,
-      notes: symptoms || 'Agendamento direto pelo portal do paciente',
-    });
-    setScreen('consultas');
+  const handleConfirmAppointment = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await addAppointment({
+        date: selectedDay.dateString,
+        time: selectedTime,
+        doctorName: 'Dr. Marcelo Arantes',
+        doctorSpecialty: 'Ortodontia & Alinhadores',
+        doctorCro: 'CRO/SP 89.412',
+        doctorAvatar: ASSETS.drMarcelo,
+        room: 'Consultório 03 - Unidade Jardins',
+        unit: 'OdontoAura Unidade Jardins',
+        procedure: 'Avaliação & Manutenção Ortodôntica',
+        insuranceName: 'Unimed Odonto Master Gold',
+        insuranceCoverage: '100% Coberto',
+        copayAmount: 0,
+        notes: symptoms || 'Agendamento direto pelo portal do paciente',
+        modality,
+      });
+      setScreen('consultas');
+    } catch {
+      // O contexto já informa o erro; o paciente permanece na tela de agendamento.
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -614,9 +624,10 @@ export const AppointmentBooking: React.FC = () => {
               <button
                 type="button"
                 onClick={handleConfirmAppointment}
+                disabled={isSaving}
                 className="w-full h-12 rounded-full bg-[#005051] hover:bg-[#006a6b] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
               >
-                <span>Avançar para Confirmação</span>
+                <span>{isSaving ? 'Salvando consulta...' : 'Confirmar agendamento'}</span>
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </button>
 

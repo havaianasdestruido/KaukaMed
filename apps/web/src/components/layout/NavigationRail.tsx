@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
 
 export const NavigationRail: React.FC = () => {
-  const { currentScreen, setScreen, currentUser, setUserRole } = useApp();
+  const { currentScreen, setScreen, currentUser, setUserRole, dataSource } = useApp();
 
   const isAdminOrStaff =
     currentUser.role === 'administrador' ||
@@ -137,15 +137,17 @@ export const NavigationRail: React.FC = () => {
           </button>
 
           {/* Quick link to switch to Admin console */}
-          <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131] w-12 flex justify-center">
-            <button
-              onClick={() => setUserRole('administrador')}
-              className="w-10 h-10 rounded-full flex flex-col items-center justify-center text-[#4a6363] hover:text-[#005051] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors"
-              title="Acessar Gestão Clínica / Admin"
-            >
-              <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
-            </button>
-          </div>
+          {dataSource === 'local' && (
+            <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131] w-12 flex justify-center">
+              <button
+                onClick={() => setUserRole('administrador')}
+                className="w-10 h-10 rounded-full flex flex-col items-center justify-center text-[#4a6363] hover:text-[#005051] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors"
+                title="Acessar Gestão Clínica / Admin"
+              >
+                <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* Bottom Help Button */}
@@ -288,16 +290,18 @@ export const NavigationRail: React.FC = () => {
           </button>
 
           {/* Quick toggle to return to Patient Portal */}
-          <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131]">
-            <button
-              onClick={() => setUserRole('paciente')}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#005051] dark:text-[#84d4d4] hover:bg-[#e2eae9] dark:hover:bg-[#202929] rounded-xl transition-colors"
-              title="Abrir Visão do Paciente"
-            >
-              <span className="material-symbols-outlined text-[18px]">personal_injury</span>
-              <span className="hidden lg:inline">Mudar p/ Portal do Paciente</span>
-            </button>
-          </div>
+          {dataSource === 'local' && (
+            <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131]">
+              <button
+                onClick={() => setUserRole('paciente')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#005051] dark:text-[#84d4d4] hover:bg-[#e2eae9] dark:hover:bg-[#202929] rounded-xl transition-colors"
+                title="Abrir Visão do Paciente"
+              >
+                <span className="material-symbols-outlined text-[18px]">personal_injury</span>
+                <span className="hidden lg:inline">Mudar p/ Portal do Paciente</span>
+              </button>
+            </div>
+          )}
         </nav>
       </div>
 

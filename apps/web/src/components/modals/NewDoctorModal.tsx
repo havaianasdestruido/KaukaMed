@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
 import { type Doctor } from '../../types';
+import { useDialogFocus } from './useDialogFocus';
 
 export const NewDoctorModal: React.FC = () => {
   const { showNewDoctorModal, setShowNewDoctorModal, addNewDoctor } = useApp();
@@ -13,6 +14,7 @@ export const NewDoctorModal: React.FC = () => {
   const [schedule, setSchedule] = useState('Seg a Sex');
   const [room, setRoom] = useState('Consultório 04');
   const [commission, setCommission] = useState(45);
+  const dialogRef = useDialogFocus(showNewDoctorModal, () => setShowNewDoctorModal(false));
 
   if (!showNewDoctorModal) return null;
 
@@ -44,7 +46,14 @@ export const NewDoctorModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl flex flex-col gap-5">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-doctor-title"
+        tabIndex={-1}
+        className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl flex flex-col gap-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#dde4e3] dark:border-[#263131]">
           <div className="flex items-center gap-3">
@@ -52,7 +61,10 @@ export const NewDoctorModal: React.FC = () => {
               <span className="material-symbols-outlined text-[22px]">person_add</span>
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
+              <h2
+                id="new-doctor-title"
+                className="text-base font-bold text-[#161d1d] dark:text-white"
+              >
                 Cadastrar Novo Profissional Clínico
               </h2>
               <p className="text-xs text-[#6e7979]">
@@ -62,6 +74,8 @@ export const NewDoctorModal: React.FC = () => {
           </div>
           <button
             onClick={() => setShowNewDoctorModal(false)}
+            type="button"
+            aria-label="Fechar cadastro de profissional"
             className="w-8 h-8 rounded-full hover:bg-[#e8efee] dark:hover:bg-[#202929] flex items-center justify-center text-[#6e7979]"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>

@@ -1,14 +1,25 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useDialogFocus } from './useDialogFocus';
 
 export const PreConsultationModal: React.FC = () => {
   const { showPreConsultationModal, setShowPreConsultationModal, addToast } = useApp();
+  const dialogRef = useDialogFocus(showPreConsultationModal, () =>
+    setShowPreConsultationModal(false),
+  );
 
   if (!showPreConsultationModal) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pre-consultation-title"
+        tabIndex={-1}
+        className="bg-white dark:bg-[#141b1b] border border-[#dde4e3] dark:border-[#263131] rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#dde4e3] dark:border-[#263131]">
           <div className="flex items-center gap-3">
@@ -16,7 +27,10 @@ export const PreConsultationModal: React.FC = () => {
               <span className="material-symbols-outlined text-[22px]">info</span>
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
+              <h2
+                id="pre-consultation-title"
+                className="text-base font-bold text-[#161d1d] dark:text-white"
+              >
                 Orientações Pré-Consulta
               </h2>
               <p className="text-xs text-[#6e7979]">
@@ -26,6 +40,8 @@ export const PreConsultationModal: React.FC = () => {
           </div>
           <button
             onClick={() => setShowPreConsultationModal(false)}
+            type="button"
+            aria-label="Fechar orientações pré-consulta"
             className="w-8 h-8 rounded-full hover:bg-[#e8efee] dark:hover:bg-[#202929] flex items-center justify-center text-[#6e7979]"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>

@@ -366,8 +366,9 @@ export const PatientDashboard: React.FC = () => {
         {/* Grid de Cards de Especialidades */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {filteredSpecialties.map((item) => (
-            <div
+            <button
               key={item.id}
+              type="button"
               onClick={() => {
                 setScreen('agendar');
                 addToast(`Especialidade ${item.title} selecionada para agendamento!`, 'info');
@@ -381,7 +382,7 @@ export const PatientDashboard: React.FC = () => {
                 {item.title}
               </span>
               <span className="text-[11px] text-[#6e7979] mt-1">{item.desc}</span>
-            </div>
+            </button>
           ))}
         </div>
       </section>

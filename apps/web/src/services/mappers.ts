@@ -120,7 +120,7 @@ export interface DoctorRow {
   crm: string;
   bio: string | null;
   consultation_price: number | string | null;
-  profile: { full_name: string; is_active: boolean } | null;
+  profile?: { full_name: string; is_active: boolean } | null;
   specialty: { name: string } | null;
   location: { name: string } | null;
 }
@@ -136,7 +136,7 @@ export interface AppointmentRow {
   doctor: {
     id: string;
     crm: string;
-    profile: { full_name: string } | null;
+    profile?: { full_name: string } | null;
     specialty: { name: string } | null;
   } | null;
   location: { name: string; address: string | null } | null;
@@ -188,6 +188,7 @@ export function appointmentFromRow(row: AppointmentRow): Appointment {
     copayAmount: insuranceName ? 0 : price,
     notes: row.notes ?? undefined,
     durationMinutes: Math.max(15, Math.round((end - start) / 60000)),
+    modality: row.type === 'TELEMEDICINE' ? 'teleorientacao' : 'presencial',
   };
 }
 

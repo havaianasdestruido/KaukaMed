@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ASSETS } from '../../data/mockData';
 
 export const MyAppointments: React.FC = () => {
   const {
@@ -25,11 +24,6 @@ export const MyAppointments: React.FC = () => {
   );
   const finishedAppointments = appointments.filter((a) => a.status === 'finalizado');
   const cancelledAppointments = appointments.filter((a) => a.status === 'cancelado');
-
-  // Observação: no protótipo original a lista de "próximas consultas" é JSX
-  // fixo (não é renderizada a partir de `nextAppointments`), então `filterQuery`
-  // ainda não filtra nada visível. Tornar esse filtro funcional está registrado
-  // como pendência em docs/FRONTEND.md.
 
   const handleToggleChecklist = (key: keyof typeof checklist) => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -185,254 +179,96 @@ export const MyAppointments: React.FC = () => {
           </div>
 
           {activeTab === 'proximas' && (
-            <div className="flex flex-col gap-6">
-              {/* Card 1: Destaque Principal (Próxima Consulta) */}
-              <div className="relative bg-[#eef5f4] dark:bg-[#1a2222] rounded-3xl p-6 shadow-sm hover:shadow-md transition-all overflow-hidden border border-[#dde4e3]/60 dark:border-[#263131]">
-                <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-[#a0f0f1]/20 dark:bg-[#004f50]/20 blur-3xl pointer-events-none"></div>
-
-                {/* Card Header / Status & Timing */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#a0f0f1] text-[#002020] text-xs font-bold tracking-wide">
-                      <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                      Confirmada
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#e8efee] dark:bg-[#202929] text-[#3e4949] dark:text-[#bec9c8] text-xs font-semibold">
-                      <span className="material-symbols-outlined text-[16px]">hourglass_top</span>
-                      Em 3 dias (24 de Outubro)
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      addToast('Consulta adicionada ao calendário pessoal.', 'success')
-                    }
-                    className="w-9 h-9 rounded-full bg-white dark:bg-[#202929] text-[#3e4949] dark:text-[#bec9c8] hover:text-[#005051] dark:hover:text-[#84d4d4] flex items-center justify-center transition-colors shadow-sm"
-                    title="Adicionar à agenda"
-                    type="button"
+            <div className="flex flex-col gap-4">
+              {nextAppointments
+                .filter((apt) =>
+                  apt.doctorName.toLowerCase().includes(filterQuery.trim().toLowerCase()),
+                )
+                .map((apt) => (
+                  <div
+                    key={apt.id}
+                    className="bg-white dark:bg-[#1a2222] rounded-3xl p-6 shadow-sm hover:shadow-md transition-all border border-[#dde4e3]/60 dark:border-[#263131]"
                   >
-                    <span className="material-symbols-outlined text-[18px]">edit_calendar</span>
-                  </button>
-                </div>
-
-                {/* Date & Time Showcase */}
-                <div className="bg-white dark:bg-[#202929] rounded-2xl p-4 shadow-sm mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border border-[#dde4e3]/60 dark:border-[#2d3838]">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] flex flex-col items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] font-bold uppercase leading-none">OUT</span>
-                      <span className="text-xl font-bold leading-none mt-1">24</span>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-bold">
+                        <span className="material-symbols-outlined text-[16px]">
+                          event_available
+                        </span>
+                        {apt.status === 'confirmado' ? 'Confirmada' : 'Agendada'}
+                      </span>
+                      <span className="text-xs text-[#6e7979]">Protocolo: {apt.id}</span>
                     </div>
-                    <div className="flex flex-col">
-                      <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
-                        Qui, 24 de Outubro às 14:30
-                      </h2>
-                      <div className="flex items-center gap-1.5 text-[#3e4949] dark:text-[#bec9c8] text-xs mt-0.5">
-                        <span className="material-symbols-outlined text-[16px] text-[#6e7979]">
-                          schedule
-                        </span>
-                        <span>Duração estimada: 45 min</span>
-                        <span>•</span>
-                        <span className="text-[#005051] dark:text-[#84d4d4] font-semibold">
-                          Chegar com 10 min de antecedência
-                        </span>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+                      <div>
+                        <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
+                          {apt.date} às {apt.time}
+                        </h2>
+                        <p className="text-xs text-[#6e7979] mt-1">{apt.procedure}</p>
+                        <p className="text-xs text-[#3e4949] dark:text-[#bec9c8] mt-1">
+                          {apt.durationMinutes} min •{' '}
+                          {apt.modality === 'teleorientacao' ? 'Teleorientação' : apt.room}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={apt.doctorAvatar}
+                          alt=""
+                          className="w-11 h-11 rounded-full object-cover shadow-sm"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-[#161d1d] dark:text-white">
+                            {apt.doctorName}
+                          </p>
+                          <p className="text-[11px] text-[#6e7979]">{apt.doctorSpecialty}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="hidden sm:flex flex-col items-end">
-                    <span className="px-2.5 py-1 rounded-full bg-[#eef5f4] dark:bg-[#1a2222] text-[#3e4949] dark:text-[#bec9c8] text-xs font-bold">
-                      Sala 3B
-                    </span>
-                  </div>
-                </div>
 
-                {/* Doctor & Location Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/80 dark:bg-[#202929]/80 shadow-sm border border-[#dde4e3]/60 dark:border-[#2d3838]">
-                    <img
-                      src={ASSETS.drMarcelo}
-                      alt="Dr. Marcelo Arantes"
-                      className="w-14 h-14 rounded-xl object-cover shadow-sm flex-shrink-0"
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-sm font-bold text-[#161d1d] dark:text-white truncate">
-                        Dr. Marcelo Arantes
-                      </span>
-                      <span className="text-xs text-[#3e4949] dark:text-[#bec9c8] truncate">
-                        Ortodontia & Ortopedia Facial
-                      </span>
-                      <span className="text-[11px] text-[#6e7979] mt-0.5">CRO/SP 89.412</span>
-                    </div>
-                  </div>
+                    <p className="text-xs text-[#3e4949] dark:text-[#bec9c8] pb-4">
+                      {apt.insuranceName} • {apt.insuranceCoverage}
+                    </p>
 
-                  <div className="flex flex-col justify-center p-4 rounded-2xl bg-white/80 dark:bg-[#202929]/80 shadow-sm border border-[#dde4e3]/60 dark:border-[#2d3838]">
-                    <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[20px] mt-0.5">
-                        location_on
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[#dde4e3] dark:border-[#263131]">
+                      <span className="text-xs text-[#3e4949] dark:text-[#bec9c8]">
+                        {apt.modality === 'teleorientacao' ? 'Atendimento remoto' : apt.unit}
                       </span>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-semibold text-[#161d1d] dark:text-white truncate">
-                          Unidade Jardins, São Paulo
-                        </span>
-                        <span className="text-xs text-[#3e4949] dark:text-[#bec9c8] truncate">
-                          Consultório 03 • Andar 2
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
-                          onClick={() =>
-                            addToast('Abrindo rota para Av. Paulista, 1578...', 'info')
-                          }
-                          className="text-[11px] text-[#005051] dark:text-[#84d4d4] font-bold mt-0.5 flex items-center gap-1 text-left hover:underline"
+                          onClick={() => addToast(apt.notes || apt.procedure, 'info')}
+                          className="h-9 px-3 rounded-full text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#eef5f4] dark:hover:bg-[#202929] text-xs font-semibold"
+                          type="button"
                         >
-                          <span>Ver rota no mapa</span>
-                          <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                          Detalhes da Consulta
+                        </button>
+                        <button
+                          onClick={() => setShowPreConsultationModal(true)}
+                          className="h-9 px-3 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-semibold"
+                          type="button"
+                        >
+                          Orientações Pré-consulta
+                        </button>
+                        <button
+                          onClick={() => setScreen('agendar')}
+                          className="h-9 px-3 rounded-full bg-[#eef5f4] dark:bg-[#202929] text-[#005051] dark:text-[#84d4d4] text-xs font-semibold"
+                          type="button"
+                        >
+                          Reagendar
+                        </button>
+                        <button
+                          onClick={() => cancelAppointment(apt.id)}
+                          className="h-9 px-3 rounded-full text-[#ba1a1a] hover:bg-[#ffdad6]/40 text-xs font-semibold"
+                          type="button"
+                        >
+                          Cancelar
                         </button>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Procedure & Coverage Info Pill */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#e8efee] dark:bg-[#202929] rounded-xl mb-4 border border-[#dde4e3]/60 dark:border-[#2d3838]">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#4a6363] dark:text-[#84d4d4] text-[20px]">
-                      medical_services
-                    </span>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                      <span className="text-xs font-bold text-[#161d1d] dark:text-white">
-                        Procedimento:
-                      </span>
-                      <span className="text-xs text-[#3e4949] dark:text-[#bec9c8]">
-                        Avaliação & Manutenção Ortodôntica
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[#051f20] dark:text-[#a0f0f1] text-[11px] font-bold bg-[#cce8e7] dark:bg-[#324b4b] px-3 py-1 rounded-full">
-                    <span className="material-symbols-outlined text-[16px]">verified</span>
-                    <span>Unimed Odonto Master Gold • 100% Coberto</span>
-                  </div>
-                </div>
-
-                {/* Quick Action Buttons Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setShowPreConsultationModal(true)}
-                      className="h-10 px-4 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-semibold hover:opacity-90 transition-colors flex items-center gap-1.5"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">info</span>
-                      <span>Orientações Pré-consulta</span>
-                    </button>
-                    <button
-                      onClick={() => setScreen('agendar')}
-                      className="h-10 px-4 rounded-full bg-white dark:bg-[#202929] text-[#005051] dark:text-[#84d4d4] text-xs font-semibold hover:bg-[#e8efee] transition-colors flex items-center gap-1.5 shadow-sm border border-[#dde4e3] dark:border-[#2d3838]"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">update</span>
-                      <span>Reagendar Horário</span>
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => cancelAppointment('apt-1')}
-                    className="h-10 px-3 rounded-full text-[#ba1a1a] hover:bg-[#ffdad6]/40 text-xs font-semibold transition-colors flex items-center gap-1"
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">cancel</span>
-                    <span>Cancelar</span>
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center gap-1 text-[#6e7979] text-xs">
-                  <span className="material-symbols-outlined text-[14px]">info</span>
-                  <span>
-                    Cancelamento ou alteração gratuitos até 24 horas antes do horário marcado.
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 2: Segunda Consulta Agendada (Novembro) */}
-              <div className="bg-white dark:bg-[#1a2222] rounded-3xl p-6 shadow-sm hover:shadow-md transition-all border border-[#dde4e3]/60 dark:border-[#263131]">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#FFDDB9] text-[#2D1600] text-xs font-bold tracking-wide">
-                      <span className="material-symbols-outlined text-[16px]">pending_actions</span>
-                      Agendada • Aguardando Aprovação
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#eef5f4] dark:bg-[#202929] text-[#3e4949] dark:text-[#bec9c8] text-xs font-semibold">
-                      Em 25 dias
-                    </span>
-                  </div>
-                  <span className="text-xs text-[#6e7979]">Protocolo: #OD-99214</span>
-                </div>
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4">
-                  <div className="flex items-start sm:items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-[#dde4e3] dark:bg-[#202929] text-[#3e4949] dark:text-[#bec9c8] flex flex-col items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] font-bold uppercase leading-none">NOV</span>
-                      <span className="text-lg font-bold leading-none mt-1">15</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <h3 className="text-base font-bold text-[#161d1d] dark:text-white">
-                        Sex, 15 de Novembro às 09:00
-                      </h3>
-                      <span className="text-xs text-[#6e7979]">
-                        Limpeza Profilática & Aplicação de Flúor
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={ASSETS.draHelena}
-                      alt="Dra. Helena Gusmão"
-                      className="w-11 h-11 rounded-full object-cover shadow-sm ring-2 ring-[#005051]/20"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-[#161d1d] dark:text-white">
-                        Dra. Helena Gusmão
-                      </span>
-                      <span className="text-[11px] text-[#6e7979]">
-                        Odontopediatria & Profilaxia
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 bg-[#eef5f4] dark:bg-[#202929] p-3 rounded-2xl border border-[#dde4e3]/60 dark:border-[#2d3838]">
-                  <div className="flex items-center gap-2 text-[#3e4949] dark:text-[#bec9c8] text-xs pl-1">
-                    <span className="material-symbols-outlined text-[18px] text-[#005051] dark:text-[#84d4d4]">
-                      pin_drop
-                    </span>
-                    <span>OdontoAura Unidade Jardins • Consultório 01</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        addToast('Consulta em análise de elegibilidade prévia no convênio.', 'info')
-                      }
-                      className="h-8 px-3 rounded-full text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#dde4e3] text-xs font-semibold transition-colors"
-                      type="button"
-                    >
-                      Detalhes da Consulta
-                    </button>
-                    <button
-                      onClick={() => setScreen('agendar')}
-                      className="h-8 px-3.5 rounded-full bg-white dark:bg-[#1a2222] text-[#161d1d] dark:text-white hover:bg-[#e8efee] text-xs font-semibold transition-colors shadow-sm"
-                      type="button"
-                    >
-                      Reagendar
-                    </button>
-                    <button
-                      onClick={() => cancelAppointment('apt-2')}
-                      className="h-8 w-8 rounded-full text-[#ba1a1a] hover:bg-[#ffdad6] flex items-center justify-center transition-colors"
-                      title="Cancelar"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                ))}
+              {nextAppointments.length === 0 && (
+                <p className="text-sm text-[#6e7979]">Nenhuma consulta agendada.</p>
+              )}
             </div>
           )}
 

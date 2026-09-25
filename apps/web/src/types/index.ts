@@ -46,6 +46,7 @@ export interface Appointment {
   copayAmount: number;
   notes?: string;
   durationMinutes: number;
+  modality?: 'presencial' | 'teleorientacao';
   rating?: number;
 }
 

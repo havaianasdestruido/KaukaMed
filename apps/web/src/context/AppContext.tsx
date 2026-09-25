@@ -60,12 +60,12 @@ interface AppContextType {
   removeToast: (id: string) => void;
 
   // Actions
-  addAppointment: (apt: Partial<Appointment>) => void;
+  addAppointment: (apt: Partial<Appointment>) => Promise<void>;
   rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
   cancelAppointment: (id: string) => void;
   transmitTissBatch: (batchId: string) => void;
-  resolveGlosa: (guideId: string) => void;
-  convertToPrivate: (guideId: string) => void;
+  resolveGlosa: (guideId: string, showToast?: boolean) => void;
+  convertToPrivate: (guideId: string, showToast?: boolean) => void;
   addNewDoctor: (doc: Doctor) => void;
 
   // Backend / autenticação
@@ -234,6 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await authService.signOut();
       } catch (error) {
         reportError(error, 'Erro ao encerrar a sessão.');
+        return;
       }
       clearSession();
     } else {
@@ -292,10 +293,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addAppointment = (aptData: Partial<Appointment>) => {
+  const addAppointment = async (aptData: Partial<Appointment>): Promise<void> => {
     if (isRemote) {
-      appointmentService
-        .createAppointment({
+      try {
+        const apt = await appointmentService.createAppointment({
           patient: currentUser,
           doctorName: aptData.doctorName,
           date: aptData.date ?? '',
@@ -303,12 +304,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           procedure: aptData.procedure,
           notes: aptData.notes,
           durationMinutes: aptData.durationMinutes,
-        })
-        .then((apt) => {
-          setAppointments((prev) => [apt, ...prev]);
-          addToast('Consulta agendada com sucesso! Protocolo gerado.', 'success');
-        })
-        .catch((error) => reportError(error, 'Não foi possível agendar a consulta.'));
+          modality: aptData.modality,
+        });
+        setAppointments((prev) => [apt, ...prev]);
+        addToast('Consulta agendada com sucesso! Protocolo gerado.', 'success');
+      } catch (error) {
+        reportError(error, 'Não foi possível agendar a consulta.');
+        throw error;
+      }
       return;
     }
     const newApt: Appointment = {
@@ -327,6 +330,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       insuranceCoverage: '100% Coberto',
       copayAmount: 0,
       durationMinutes: 45,
+      modality: aptData.modality,
       notes: aptData.notes,
     };
     setAppointments((prev) => [newApt, ...prev]);
@@ -385,7 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Lote TISS enviado com sucesso para a operadora via WebService Seguro!', 'success');
   };
 
-  const resolveGlosa = (guideId: string) => {
+  const resolveGlosa = (guideId: string, showToast = true) => {
     setTissGuides((prev) =>
       prev.map((g) =>
         g.id === guideId
@@ -398,10 +402,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : g,
       ),
     );
-    addToast('Laudo Radiológico periapical anexado. Guia validada e liberada!', 'success');
+    if (showToast)
+      addToast('Laudo Radiológico periapical anexado. Guia validada e liberada!', 'success');
   };
 
-  const convertToPrivate = (guideId: string) => {
+  const convertToPrivate = (guideId: string, showToast = true) => {
     setTissGuides((prev) =>
       prev.map((g) =>
         g.id === guideId
@@ -415,7 +420,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : g,
       ),
     );
-    addToast('Procedimento convertido para cobrança particular com sucesso!', 'info');
+    if (showToast)
+      addToast('Procedimento convertido para cobrança particular com sucesso!', 'info');
   };
 
   const addNewDoctor = (doc: Doctor) => {

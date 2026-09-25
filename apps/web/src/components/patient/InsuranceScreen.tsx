@@ -8,10 +8,7 @@ export const InsuranceScreen: React.FC = () => {
 
   const handleValidate = (e: React.FormEvent) => {
     e.preventDefault();
-    addToast(
-      'Elegibilidade verificada em tempo real via WebService ANS: 100% Coberto sem carência!',
-      'success',
-    );
+    addToast('Demonstração: a elegibilidade do convênio ainda não foi verificada.', 'info');
   };
 
   return (
@@ -23,7 +20,7 @@ export const InsuranceScreen: React.FC = () => {
             Meu Convênio & Cobertura Odontológica
           </h1>
           <p className="text-xs sm:text-sm text-[#3e4949] dark:text-[#bec9c8] mt-1">
-            Validação instantânea de elegibilidade, carteirinha digital e tabela de coparticipação.
+            Demonstração de convênio e carteirinha digital. Confirme a cobertura com a operadora.
           </p>
         </div>
 
@@ -102,10 +99,10 @@ export const InsuranceScreen: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[#dde4e3]/60 dark:border-[#263131]">
               <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[22px]">
-                verified
+                info
               </span>
               <h2 className="text-sm font-bold text-[#161d1d] dark:text-white">
-                Validar Elegibilidade do Convênio
+                Demonstração de Elegibilidade
               </h2>
             </div>
 
@@ -138,11 +135,11 @@ export const InsuranceScreen: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3 rounded-2xl bg-[#B2F1B8]/40 border border-[#B2F1B8] text-xs text-[#002107] flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-[#2E6C38]">
-                  check_circle
+              <div className="p-3 rounded-2xl bg-[#eef5f4] dark:bg-[#202929] border border-[#dde4e3] dark:border-[#2d3838] text-xs text-[#3e4949] dark:text-[#bec9c8] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-[#005051] dark:text-[#84d4d4]">
+                  info
                 </span>
-                <span>Cobertura ativa para consultas, profilaxia, ortodontia e restaurações.</span>
+                <span>Exemplo de cobertura. A elegibilidade ainda não foi verificada.</span>
               </div>
 
               <button
@@ -150,7 +147,7 @@ export const InsuranceScreen: React.FC = () => {
                 className="w-full h-11 rounded-full bg-[#005051] text-white text-xs font-bold hover:bg-[#006a6b] transition-all shadow-md flex items-center justify-center gap-2 mt-2"
               >
                 <span className="material-symbols-outlined text-[18px]">cloud_sync</span>
-                <span>Revalidar com Operadora</span>
+                <span>Ver demonstração de elegibilidade</span>
               </button>
             </form>
           </div>
