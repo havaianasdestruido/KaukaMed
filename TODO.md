@@ -47,10 +47,10 @@
 
 ## 📦 Entrega 4 — Quebra da SPEC em Tarefas (para IA programar)
 **Responsável:** DBA (coordena) · Apoio: BE-A, BE-B, FE
-- [ ] Enviar o `SPEC.md` + `schema.sql` ao **Kimi** com o prompt: *"Com base na SPEC e no schema do Supabase, quebre o sistema em tarefas de programação detalhadas, no formato markdown com checkboxes, organizadas por módulo e ordem de dependência"*
-- [ ] Revisar e ajustar as tarefas geradas (remover duplicatas, validar dependências)
-- [ ] Converter cada bloco de tarefas em arquivos **.md** separados (ex.: `docs/tasks/01-auth.md`, `02-agendamentos.md`, ...)
-- [ ] Commitar e enviar todos os .md de tarefas para o GitHub
+- [x] Enviar o `SPEC.md` + `schema.sql` ao **Kimi** com o prompt: *"Com base na SPEC e no schema do Supabase, quebre o sistema em tarefas de programação detalhadas, no formato markdown com checkboxes, organizadas por módulo e ordem de dependência"*
+- [x] Revisar e ajustar as tarefas geradas (remover duplicatas, validar dependências)
+- [x] Converter cada bloco de tarefas em arquivos **.md** separados → [`docs/tasks/`](docs/tasks/README.md) (00-setup … 10-testes)
+- [x] Commitar e enviar todos os .md de tarefas para o GitHub
 - [ ] Criar GitHub Issues (ou Projects) a partir dos .md para rastreamento
 
 ---
