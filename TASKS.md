@@ -1,17 +1,15 @@
-1
-Criar SPEC, anexar os arquivos .zip e anexar
+~~1 Criar SPEC, anexar os arquivos .zip e anexar~~~ CONCLUIDO
 
-2
-Criar o repositório, e adicionar os professores como colaboradores
+~~2 Criar o repositório, e adicionar os professores como colaboradores~~ CONCLUIDO
 
-3
+~~3
 Criar o BD NO SUPABASE
--utilizar KIMI ia e gerar o esquema sql baseado na SPEC
--crie um database no supabase e cole ao esquema gerado
+-utilizar IA ia e gerar o esquema sql baseado na SPEC
+-crie um database no supabase e cole ao esquema gerado~~ CONCLUIDO
 
 4
 Quebrar a SPEC em tarefas para que uma IA programe
--com BD ja criado supabase, peca pra kimi quebrar a SPEC principal em tarefas
+-com BD ja criado supabase, peca pra IA quebrar a SPEC principal em tarefas
 -envie ao github as tarefas
 obs:todas tarefas precisam ser salvas em .MD
 
@@ -24,11 +22,11 @@ Entrega 1° Versão
 
 6
 Fazer documentação do sistema
--enviar os arquivos SPEC.MD e o esquema do banco de dados para o miro.com
+-enviar os arquivos SPEC.MD e o esquema do banco de dados para o IA
 - solicite a geração individual do seguinte esquema: diagrama de classes, diagrama de entidade e relacionamento, e dps exportar as imagens dos diagramas gerados
--anexe no gemini: SPEC.MD, o diagrama de classes e as capturas de telas do sistema, dps fazer um prompt: a partir da informacoes anexadas, gere um manual completo de uso do sistema e dps exporte a resposta para o google docs, adicione a identidade visual do sistema e salve como PDF
--anexe no gemini: o logotipo e o arquivo DESIGN.MD, e envie:"a partir dos arquivos anexados crie um manual de identidade visual do sistema, e dps exporte o conteudo pro google docs/slide/canva e ajuste a formatação e salve como PDF
--Reuna todos os arquivos feitos(diagramas miro e manuais em PDF) em 1 pasta. e dps compacte a pasta no formato .zip e faca o envio final
+-anexe no IA: SPEC.MD, o diagrama de classes e as capturas de telas do sistema, dps fazer um prompt: a partir da informacoes anexadas, gere um manual completo de uso do sistema e dps exporte a resposta para o google docs, adicione a identidade visual do sistema e salve como PDF
+-anexe no IA: o logotipo e o arquivo DESIGN.MD, e envie:"a partir dos arquivos anexados crie um manual de identidade visual do sistema, e dps exporte o conteudo pro google docs/slide/canva e ajuste a formatação e salve como PDF
+-Reuna todos os arquivos feitos(diagramas IA e manuais em PDF) em 1 pasta. e dps compacte a pasta no formato .zip e faca o envio final
 
 7
 Entrega da versão final
