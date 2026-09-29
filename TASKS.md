@@ -7,11 +7,11 @@ Criar o BD NO SUPABASE
 -utilizar IA ia e gerar o esquema sql baseado na SPEC
 -crie um database no supabase e cole ao esquema gerado~~ CONCLUIDO
 
-4
+~~4
 Quebrar a SPEC em tarefas para que uma IA programe
 -com BD ja criado supabase, peca pra IA quebrar a SPEC principal em tarefas
 -envie ao github as tarefas
-obs:todas tarefas precisam ser salvas em .MD
+obs:todas tarefas precisam ser salvas em .MD~~ CONCLUIDO — tarefas em [docs/tasks/](docs/tasks/README.md) (11 arquivos .md, por módulo e ordem de dependência, com divisão FE / BE-A / BE-B / DBA)
 
 5
 Entrega 1° Versão
