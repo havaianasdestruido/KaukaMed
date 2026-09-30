@@ -39,6 +39,17 @@ describe('errors', () => {
     expect(translateMessage('new row violates row-level security policy')).toContain('permissão');
   });
 
+  it('trata a falta de GRANT na tabela como problema de instalação, não de permissão', () => {
+    const msg = translateMessage('permission denied for table profiles');
+    expect(msg).toContain('"profiles"');
+    expect(msg).toContain('migration 002');
+    // RLS e função continuam com a mensagem de permissão do usuário.
+    expect(translateMessage('new row violates row-level security policy for table "x"')).toContain(
+      'permissão',
+    );
+    expect(translateMessage('permission denied for function list_doctors')).toContain('permissão');
+  });
+
   it('repassa as mensagens em pt-BR do banco sem alterar', () => {
     const msg = 'Este horário acabou de ser reservado. Escolha outro horário.';
     expect(translateMessage(msg)).toBe(msg);

@@ -52,6 +52,12 @@ export function translateMessage(msg: string): string {
   if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
     return 'Sem conexão com o servidor. Verifique a internet e tente novamente.';
   }
+  // Falta de GRANT na tabela: o Supabase novo não concede sozinho (veja a seção 13 da migration
+  // 002). É problema de instalação, não de permissão do usuário — o texto ajuda quem configura.
+  const noGrant = /permission denied for (?:table|view) "?([\w.]+)"?/i.exec(msg);
+  if (noGrant) {
+    return `O banco ainda não liberou a tabela "${noGrant[1]}" para o app (faltam os GRANTs). Peça ao administrador para rodar a migration 002 inteira no Supabase.`;
+  }
   if (/row-level security|permission denied/i.test(msg)) {
     return 'Você não tem permissão para esta ação.';
   }
