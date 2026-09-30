@@ -63,7 +63,7 @@ jobs:
             try {
               const payload = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString("utf8"));
               if (payload.role !== "anon") {
-                console.log(`::error title=Chave errada::a chave informada tem role "${payload.role}". Use a chave "anon public" — nunca a service_role.`);
+                console.log(`::error title=Chave errada::a chave informada tem role "${payload.role}". Use a chave pública (Publishable key ou anon) — nunca a service_role.`);
                 process.exit(1);
               }
             } catch {
