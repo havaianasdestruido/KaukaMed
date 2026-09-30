@@ -30,6 +30,8 @@
     "infra:logs": "docker compose logs -f",
     "infra:reset": "docker compose down -v",
     "db:psql": "docker compose exec postgres psql -U kaukamed -d kaukamed",
+    "db:test": "docker compose exec -T postgres psql -U kaukamed -d kaukamed -v ON_ERROR_STOP=1 < db/tests/002_agendamento.test.sql",
+    "db:seed": "docker compose exec -T postgres psql -U kaukamed -d kaukamed -v ON_ERROR_STOP=1 < db/seed.sql",
     "db:redis": "docker compose exec redis redis-cli",
     "postinstall": "npm run build:shared",
     "prepare": "husky"
