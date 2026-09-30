@@ -4,7 +4,7 @@
 #   1. Settings → Pages → Build and deployment → Source: "GitHub Actions".
 #   2. Settings → Secrets and variables → Actions → New repository secret:
 #        VITE_SUPABASE_URL        (Project URL do Supabase)
-#        VITE_SUPABASE_ANON_KEY   (chave "anon public" — NUNCA a service_role)
+#        VITE_SUPABASE_ANON_KEY   (chave pública: "sb_publishable_…" ou a "anon" antiga — NUNCA a secret/service_role)
 #   3. No Supabase, rodar o SQL de db/ (veja db/README.md).
 # Depois de configurar, basta um push na main — ou rodar este workflow manualmente
 # (Actions → Deploy → Run workflow).
@@ -77,10 +77,17 @@ jobs:
       - name: Conferir se o banco tem a migration 002
         run: |
           body=$(mktemp)
+          # As chaves novas (sb_publishable_…) não são JWT: vão só no cabeçalho apikey.
+          # A chave anon antiga (JWT) também vai em Authorization, como o supabase-js faz.
+          auth=()
+          case "$VITE_SUPABASE_ANON_KEY" in
+            sb_*) ;;
+            *) auth=(-H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY") ;;
+          esac
           status=$(curl -sS -m 30 -o "$body" -w '%{http_code}' -X POST \
             "${VITE_SUPABASE_URL%/}/rest/v1/rpc/list_doctors" \
             -H "apikey: $VITE_SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
+            "${auth[@]}" \
             -H "Content-Type: application/json" -d '{}' || true)
           status=${status:-000}
           echo "HTTP $status"

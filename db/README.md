@@ -33,7 +33,7 @@ A ordem importa — cada arquivo depende do anterior:
 4. Em **Authentication → URL Configuration**, ponha o endereço publicado (ex.:
    `https://havaianasdestruido.github.io/KaukaMed/`) em **Site URL** e em **Redirect URLs**. É para
    lá que voltam os links de confirmação de e-mail e de "esqueci minha senha".
-5. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public** para os
+5. Em **Project Settings → API Keys** (ou no botão **Connect**), copie a **Project URL** e a **Publishable key** (`sb_publishable_…`; ou a **anon public**, nos projetos antigos) para os
    _secrets_ do GitHub (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). **Nunca** use a chave
    `service_role` no front-end.
 

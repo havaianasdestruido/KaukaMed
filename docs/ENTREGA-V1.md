@@ -207,8 +207,7 @@ Feito **uma vez**; depois disso, todo push na `main` publica sozinho.
    (Mais detalhes em [`db/README.md`](../db/README.md).)
 2. **Supabase — Auth.** _Authentication → Providers → Email_: desative **Confirm email**. _Authentication →
    URL Configuration_: **Site URL** e **Redirect URLs** = `https://havaianasdestruido.github.io/KaukaMed/`.
-3. **Supabase — chaves.** _Project Settings → API_: copie a **Project URL** e a chave **anon public**.
-   Nunca use a `service_role` no front-end.
+3. **Supabase — chaves.** _Settings → API Keys_ (ou o botão **Connect**): copie a **Project URL** e a **Publishable key** (`sb_publishable_…`). Projetos antigos têm a chave **anon public**, que também serve (o Supabase vai desativá-la até o fim de 2026). **Nunca** a _Secret key_ (`sb_secret_…`) nem a `service_role`. O nome do secret continua `VITE_SUPABASE_ANON_KEY`, seja qual for a chave.
 4. **GitHub — secrets.** _Settings → Secrets and variables → Actions → New repository secret_:
    `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
 5. **GitHub — Pages.** _Settings → Pages → Build and deployment → Source: **GitHub Actions**_.
@@ -220,7 +219,7 @@ Feito **uma vez**; depois disso, todo push na `main` publica sozinho.
 
 | Sintoma                                                                   | Causa provável                                          | O que fazer                                                                         |
 | :------------------------------------------------------------------------ | :------------------------------------------------------ | :---------------------------------------------------------------------------------- |
-| Workflow **Deploy** falha em _Conferir as credenciais_                    | Secrets não cadastrados, ou chave `service_role`        | Passos 3 e 4 (use a chave **anon**)                                                 |
+| Workflow **Deploy** falha em _Conferir as credenciais_                    | Secrets não cadastrados, ou chave `service_role`        | Passos 3 e 4 (chave **pública**)                                                    |
 | Workflow falha em _Conferir se o banco tem a migration 002_               | O SQL não foi executado nesse projeto                   | Passo 1                                                                             |
 | Deploy falha em _configure-pages_ ("Get Pages site failed")               | Pages não habilitado                                    | Passo 5                                                                             |
 | Site abre em 404                                                          | Deploy ainda não rodou ou falhou                        | Veja a aba _Actions_                                                                |
