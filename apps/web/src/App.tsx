@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { ToastContainer } from './components/common/ToastContainer';
 import { TopHeader } from './components/layout/TopHeader';
@@ -32,6 +32,13 @@ const AppContent: React.FC = () => {
     isAuthenticated,
     isRecoveringPassword,
   } = useApp();
+
+  // Sem roteador, o navegador não volta ao topo quando a tela muda (nem depois do login):
+  // no celular o painel abriria rolado até onde estava o botão "Entrar".
+  useEffect(() => {
+    const scroller = document.scrollingElement ?? document.documentElement;
+    scroller.scrollTop = 0;
+  }, [currentScreen, isAuthenticated]);
 
   // Enquanto a sessão persistida do Supabase é restaurada, mostra um splash.
   if (isAuthLoading) {

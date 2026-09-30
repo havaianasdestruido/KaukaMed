@@ -37,6 +37,18 @@ const SCREENS_BY_ROLE: Record<UserRole, readonly ScreenId[]> = {
 /** Telas que existem antes do login. */
 const PUBLIC_SCREENS: readonly ScreenId[] = ['login', 'cadastro'];
 
+/** Nome de cada papel para mostrar ao usuário (o id interno `funcionario` não tem acento). */
+const ROLE_LABELS: Record<UserRole, string> = {
+  paciente: 'Paciente',
+  funcionario: 'Funcionário',
+  dentista: 'Dentista',
+  administrador: 'Administrador',
+};
+
+export function roleLabel(role: UserRole): string {
+  return ROLE_LABELS[role];
+}
+
 /** Tela inicial de cada papel. */
 export function homeFor(role: UserRole): ScreenId {
   return role === 'paciente' ? 'inicio-dashboard' : 'admin-agenda';

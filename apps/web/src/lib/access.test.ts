@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { type ScreenId, type UserRole } from '../types';
-import { canAccess, homeFor, screensFor } from './access';
+import { canAccess, homeFor, roleLabel, screensFor } from './access';
 
 const ROLES: UserRole[] = ['paciente', 'funcionario', 'dentista', 'administrador'];
 
@@ -55,5 +55,21 @@ describe('access — telas por papel', () => {
   it('as telas de gestão ficam fora do portal do paciente', () => {
     const patientScreens = screensFor('paciente');
     expect(patientScreens.some((s) => s.startsWith('admin-'))).toBe(false);
+  });
+});
+
+describe('access — nome do papel na tela', () => {
+  it('usa o nome em português, com acento', () => {
+    expect(roleLabel('paciente')).toBe('Paciente');
+    expect(roleLabel('funcionario')).toBe('Funcionário');
+    expect(roleLabel('dentista')).toBe('Dentista');
+    expect(roleLabel('administrador')).toBe('Administrador');
+  });
+
+  it('todo papel tem um nome, sem mostrar o id interno', () => {
+    for (const role of ROLES) {
+      expect(roleLabel(role).toLowerCase()).not.toBe('funcionario');
+      expect(roleLabel(role).length).toBeGreaterThan(0);
+    }
   });
 });

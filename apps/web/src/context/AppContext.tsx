@@ -27,7 +27,7 @@ import {
   INITIAL_ODONTOGRAM,
 } from '../data/mockData';
 import { activeDataSource, reportDataSource, type DataSource } from '../lib/env';
-import { canAccess, homeFor } from '../lib/access';
+import { canAccess, homeFor, roleLabel } from '../lib/access';
 import { ACTION_TARGET_STATUS, type AppointmentAction } from '../lib/appointmentRules';
 import { openedFromRecoveryLink, supabase, toErrorMessage } from '../lib/supabase';
 import * as authService from '../services/auth';
@@ -393,7 +393,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(profile);
     setIsAuthenticated(true);
     setCurrentScreen(homeFor(profile.role));
-    addToast(`Perfil alterado para ${role.toUpperCase()}: ${profile.name}`, 'info');
+    addToast(`Perfil alterado para ${roleLabel(role)}: ${profile.name}`, 'info');
     void refreshData(profile);
   };
 

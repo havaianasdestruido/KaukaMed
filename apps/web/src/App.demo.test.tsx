@@ -47,6 +47,19 @@ describe('App (modo demonstração) — paciente', () => {
     expect(screen.getByText(/Sua próxima consulta é em 3 dias/)).toBeTruthy();
   });
 
+  it('volta ao topo da página ao trocar de tela', async () => {
+    const u = user();
+    render(<App />);
+    await screen.findByText(/Olá, Dra\. Camila/);
+
+    // O usuário rolou o painel até o fim e abre outra tela pelo menu lateral.
+    document.documentElement.scrollTop = 480;
+    await u.click(screen.getByTitle('Consultas'));
+    await screen.findByRole('heading', { name: 'Minhas Consultas' });
+
+    expect(document.documentElement.scrollTop).toBe(0);
+  });
+
   it('lista as consultas em abas e cancela uma consulta futura', async () => {
     const u = user();
     render(<App />);

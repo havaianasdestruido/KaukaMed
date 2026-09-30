@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { nextAppointment } from '../../lib/appointmentRules';
+import { roleLabel } from '../../lib/access';
 import { describeDistance } from '../../lib/clinicTime';
 import { type UserRole } from '../../types';
 
@@ -54,7 +55,7 @@ export const TopHeader: React.FC = () => {
     >
       <div className="h-16 w-full px-4 lg:px-6 flex items-center justify-between gap-4">
         {/* Busca (apenas no modo demonstração: com o banco real ainda não há busca global) */}
-        <div className="flex items-center gap-3 flex-1 max-w-xl">
+        <div className="flex items-center gap-3 flex-1 min-w-0 max-w-xl">
           {!isRemote ? (
             <div className="flex items-center gap-2 bg-white dark:bg-[#1a2222] px-4 py-1.5 rounded-full shadow-[0_1px_3px_1px_rgba(0,40,40,0.08)] w-full max-w-md focus-within:shadow-[0_2px_6px_2px_rgba(0,40,40,0.12)] border border-[#bec9c8]/30 dark:border-[#263131] transition-shadow">
               <span className="material-symbols-outlined text-[#6e7979] text-[20px]">search</span>
@@ -82,7 +83,7 @@ export const TopHeader: React.FC = () => {
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           {/* Unidade: no banco há uma só; o seletor de várias unidades é apenas da demonstração */}
           <div className="hidden sm:flex items-center gap-1.5 bg-[#eef5f4] dark:bg-[#1a2222] px-3 py-1.5 rounded-xl border border-transparent dark:border-[#263131]">
             <span className="material-symbols-outlined text-[#4a6363] dark:text-[#84d4d4] text-[18px]">
@@ -198,8 +199,8 @@ export const TopHeader: React.FC = () => {
                 <span className="text-xs font-semibold text-[#161d1d] dark:text-[#e1e8e7] leading-tight">
                   {currentUser.name}
                 </span>
-                <span className="text-[11px] text-[#4a6363] dark:text-[#bec9c8] capitalize">
-                  {currentUser.specialty || currentUser.role}
+                <span className="text-[11px] text-[#4a6363] dark:text-[#bec9c8]">
+                  {currentUser.specialty || roleLabel(currentUser.role)}
                 </span>
               </div>
               <span className="material-symbols-outlined text-[18px] text-[#6e7979]">
@@ -222,7 +223,7 @@ export const TopHeader: React.FC = () => {
                     </span>
                     <span className="text-xs text-[#6e7979] truncate">{currentUser.email}</span>
                     <span className="text-[10px] font-semibold text-[#005051] dark:text-[#84d4d4] uppercase mt-0.5">
-                      Perfil: {currentUser.role}
+                      Perfil: {roleLabel(currentUser.role)}
                     </span>
                   </div>
                 </div>

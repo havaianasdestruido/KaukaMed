@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
+import { roleLabel } from '../../lib/access';
 import { type UserRole } from '../../types';
 
 export const LoginScreen: React.FC = () => {
@@ -51,7 +52,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
     setUserRole(selectedRole);
-    addToast(`Bem-vindo de volta! Autenticado como ${selectedRole.toUpperCase()}.`, 'success');
+    addToast(`Bem-vindo de volta! Autenticado como ${roleLabel(selectedRole)}.`, 'success');
   };
 
   return (
