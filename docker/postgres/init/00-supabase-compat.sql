@@ -51,6 +51,33 @@ create table if not exists auth.users (
 comment on table auth.users is
   'Compatibilidade local com o Supabase Auth — usado apenas em desenvolvimento.';
 
+-- Colunas do GoTrue que o db/seed.sql preenche (no Supabase elas já existem).
+-- `alter ... if not exists` permite reaplicar este script num volume antigo.
+alter table auth.users
+  add column if not exists instance_id             uuid,
+  add column if not exists aud                     varchar(255),
+  add column if not exists role                    varchar(255),
+  add column if not exists raw_app_meta_data       jsonb,
+  add column if not exists confirmation_token      varchar(255),
+  add column if not exists recovery_token          varchar(255),
+  add column if not exists email_change_token_new  varchar(255),
+  add column if not exists email_change            varchar(255);
+
+-- Identidades (provedor de login) de cada usuário. O seed cria a identidade
+-- "email" para que o usuário apareça corretamente no painel do Supabase.
+create table if not exists auth.identities (
+  id              uuid primary key default gen_random_uuid(),
+  provider_id     text not null,
+  user_id         uuid not null references auth.users (id) on delete cascade,
+  identity_data   jsonb not null,
+  provider        text not null,
+  last_sign_in_at timestamptz,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  email           text generated always as (lower(identity_data ->> 'email')) stored,
+  unique (provider_id, provider)
+);
+
 -- ----------------------------------------------------------------------------
 -- 3. FUNÇÕES DE AUTENTICAÇÃO USADAS PELAS POLÍTICAS DE RLS
 --    As claims do JWT são lidas das variáveis de sessão
@@ -93,7 +120,7 @@ $$;
 --    quais linhas cada usuário enxerga. `service_role` ignora o RLS.
 -- ----------------------------------------------------------------------------
 grant usage on schema public to anon, authenticated, service_role;
-grant usage on schema auth to authenticated, service_role;
+grant usage on schema auth to anon, authenticated, service_role;
 
 grant execute on function auth.jwt() to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
