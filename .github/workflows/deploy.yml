@@ -35,7 +35,8 @@ env:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    # Runner fixo: o rótulo ubuntu-latest passa a apontar para o Ubuntu 26 em 19/10/2026.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -130,7 +131,7 @@ jobs:
   deploy:
     name: Publicar no GitHub Pages
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: github-pages
