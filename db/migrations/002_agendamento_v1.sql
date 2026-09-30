@@ -853,6 +853,32 @@ begin
   end loop;
 end $$;
 
+-- ----------------------------------------------------------------------------
+-- 13. Privilégios das tabelas (explícitos)
+--     Projetos Supabase criados a partir de 30/05/2026 não dão privilégio nenhum às
+--     tabelas do schema public (e, a partir de 30/10/2026, isso vale para as tabelas
+--     novas de qualquer projeto). Sem GRANT a API responde "permission denied for table
+--     ..." mesmo com a RLS certa, e o login do app cai ao ler `profiles`. Aqui fica
+--     declarado o que o app usa; a RLS continua decidindo QUAIS LINHAS cada papel vê.
+--     Em projetos antigos, que já têm esses privilégios por padrão, nada muda.
+--       - authenticated: lê (a RLS filtra) e atualiza o próprio perfil (RLS
+--         profiles_update + guard_profile_update). Toda outra escrita passa pelas
+--         funções SECURITY DEFINER da seção 12.
+--       - anon: não toca em tabela nenhuma (login e cadastro vão para o GoTrue).
+--       - service_role: chave secreta, só no servidor; ignora a RLS mas precisa do GRANT.
+-- ----------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select on all tables in schema public to authenticated;
+grant update on public.profiles to authenticated;
+
+-- As policies chamam estas duas funções com os privilégios de quem consulta.
+grant execute on function public.current_user_role() to authenticated, service_role;
+grant execute on function public.is_staff() to authenticated, service_role;
+
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+
 -- Pede ao PostgREST (API do Supabase) que recarregue o cache de schema.
 notify pgrst, 'reload schema';
 

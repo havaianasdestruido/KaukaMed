@@ -2,7 +2,9 @@
 #
 #  - web:      lint, typecheck, testes do front-end e build de produção.
 #  - database: aplica compat + schema + migrations + seed num PostgreSQL 17 limpo, roda as
-#              111 asserções SQL e os testes do front-end contra as funções SQL reais.
+#              111 asserções SQL e os testes do front-end contra as funções SQL reais. O compat
+#              imita um projeto Supabase novo (sem GRANT automático nas tabelas): uma migration
+#              que dependa de privilégio implícito reprova aqui, não no projeto do usuário.
 #
 # Não usa nenhum segredo: o build aqui roda em modo demonstração (sem Supabase).
 name: CI

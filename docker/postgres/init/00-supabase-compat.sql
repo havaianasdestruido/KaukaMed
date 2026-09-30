@@ -115,9 +115,12 @@ $$;
 
 -- ----------------------------------------------------------------------------
 -- 4. PERMISSÕES BÁSICAS
---    Espelham o comportamento do Supabase: os papéis recebem privilégios de
---    tabela no schema `public` e é o RLS (as policies do schema) que controla
---    quais linhas cada usuário enxerga. `service_role` ignora o RLS.
+--    Espelham um projeto Supabase criado depois de 30/05/2026: os papéis da API só
+--    recebem USO dos schemas. Tabelas e sequências NÃO ganham privilégio sozinhas (nos
+--    projetos antigos ganhavam) — cada migration declara os próprios GRANTs (veja a
+--    seção 13 de db/migrations/002). É a RLS que controla quais linhas cada usuário
+--    enxerga; `service_role` ignora a RLS. Emular o caso mais restrito faz o CI reprovar
+--    uma migration que dependa de privilégios automáticos, que o Supabase está removendo.
 -- ----------------------------------------------------------------------------
 grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
@@ -125,15 +128,5 @@ grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.jwt() to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 grant execute on function auth.role() to anon, authenticated, service_role;
-
--- Vale para as tabelas futuras (as do schema do KaukaMed, criadas na sequência)...
-alter default privileges in schema public
-  grant all on tables to anon, authenticated, service_role;
-alter default privileges in schema public
-  grant all on sequences to anon, authenticated, service_role;
-
--- ...e também garante os privilégios caso este script rode novamente depois.
-grant all on all tables in schema public to anon, authenticated, service_role;
-grant all on all sequences in schema public to anon, authenticated, service_role;
 
 -- Fim da camada de compatibilidade — KAUKAMED

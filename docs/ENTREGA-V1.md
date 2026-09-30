@@ -162,25 +162,26 @@ Dividido pelos quatro papéis da equipe ([`TASKS.md`](../TASKS.md): 2 back-end, 
 
 ### 🗄️ DBA — Banco de dados
 
-| Pri. | Item                                                                                                      |
-| :--: | :-------------------------------------------------------------------------------------------------------- |
-|  🔴  | Confirmar no **Supabase real** o seed e o login dos 4 papéis (o GoTrue não foi exercitado aqui)           |
-|  🔴  | Testes SQL para as policies de prontuário e prescrição (hoje os testes cobrem agenda, perfis e convênios) |
-|  🟡  | Migrations: múltiplas janelas por dia, salas, guias TISS; revisar índices com as consultas reais          |
-|  🟡  | Ambiente de _staging_ separado do de produção; backups                                                    |
+| Pri. | Item                                                                                                                                                                                                        |
+| :--: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  🔴  | Confirmar no **Supabase real** o seed e o login dos 4 papéis (o GoTrue não foi exercitado aqui)                                                                                                             |
+|  🔴  | Testes SQL para as policies de prontuário e prescrição (hoje os testes cobrem agenda, perfis e convênios)                                                                                                   |
+|  🟡  | Privilégios: hoje `authenticated` só lê tabelas (e atualiza o próprio perfil). Telas de administração que gravarem direto em tabelas precisam de `GRANT` na migration — o Supabase novo não concede sozinho |
+|  🟡  | Migrations: múltiplas janelas por dia, salas, guias TISS; revisar índices com as consultas reais                                                                                                            |
+|  🟡  | Ambiente de _staging_ separado do de produção; backups                                                                                                                                                      |
 
 ---
 
 ## 🧪 Como foi validado — e o que não foi
 
-| O quê                                                                                                                                                    | Resultado                                    |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
-| Regras do banco: 111 asserções SQL (papéis, RLS, agenda, status, 2 h, convênio) em PostgreSQL 17                                                         | ✅ passam; migration e seed idempotentes     |
-| Front-end: 107 testes (regras puras, gateways, mappers, 8 fluxos de tela no modo demonstração e 8 de recuperação de senha/sessão)                        | ✅ passam                                    |
-| App real × funções SQL reais: 7 fluxos (login, agendar/cancelar, recepção, dentista, cadastro)                                                           | ✅ passam (exigem um Postgres; o CI sobe um) |
-| Navegador real (Chromium headless): todas as telas dos 4 papéis em desktop e em 390 px, e o fluxo de recuperação de senha com o `supabase-js` de verdade | ✅ sem erros no console (backend simulado)   |
-| Contrato: parâmetros das chamadas ao banco conferidos contra o próprio SQL                                                                               | ✅ (quebra se o nome de um parâmetro mudar)  |
-| `lint`, `typecheck`, `build`; bundle sem `service_role`; workflows validados contra o schema do GitHub Actions                                           | ✅                                           |
+| O quê                                                                                                                                                          | Resultado                                    |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| Regras do banco: 111 asserções SQL (papéis, RLS, agenda, status, 2 h, convênio) em PostgreSQL 17, com os privilégios dos projetos Supabase **novos e antigos** | ✅ passam; migration e seed idempotentes     |
+| Front-end: 107 testes (regras puras, gateways, mappers, 8 fluxos de tela no modo demonstração e 8 de recuperação de senha/sessão)                              | ✅ passam                                    |
+| App real × funções SQL reais: 7 fluxos (login, agendar/cancelar, recepção, dentista, cadastro)                                                                 | ✅ passam (exigem um Postgres; o CI sobe um) |
+| Navegador real (Chromium headless): todas as telas dos 4 papéis em desktop e em 390 px, e o fluxo de recuperação de senha com o `supabase-js` de verdade       | ✅ sem erros no console (backend simulado)   |
+| Contrato: parâmetros das chamadas ao banco conferidos contra o próprio SQL                                                                                     | ✅ (quebra se o nome de um parâmetro mudar)  |
+| `lint`, `typecheck`, `build`; bundle sem `service_role`; workflows validados contra o schema do GitHub Actions                                                 | ✅                                           |
 
 **O que NÃO foi validado** (não havia acesso de administrador nem rede para o Supabase/GitHub neste ambiente):
 
@@ -217,17 +218,18 @@ Feito **uma vez**; depois disso, todo push na `main` publica sozinho.
 
 ## 🩺 Se algo não funcionar
 
-| Sintoma                                                     | Causa provável                                   | O que fazer                                        |
-| :---------------------------------------------------------- | :----------------------------------------------- | :------------------------------------------------- |
-| Workflow **Deploy** falha em _Conferir as credenciais_      | Secrets não cadastrados, ou chave `service_role` | Passos 3 e 4 (use a chave **anon**)                |
-| Workflow falha em _Conferir se o banco tem a migration 002_ | O SQL não foi executado nesse projeto            | Passo 1                                            |
-| Deploy falha em _configure-pages_ ("Get Pages site failed") | Pages não habilitado                             | Passo 5                                            |
-| Site abre em 404                                            | Deploy ainda não rodou ou falhou                 | Veja a aba _Actions_                               |
-| "E-mail ou senha inválidos" com as contas do seed           | Seed não rodou neste projeto                     | Rode `db/seed.sql` (passo 1)                       |
-| "O banco de dados ainda não tem a função …"                 | Migration 002 ausente                            | Rode `db/migrations/002_agendamento_v1.sql`        |
-| Cadastro diz "Confirme seu e-mail"                          | _Confirm email_ ligado                           | Desative (passo 2) ou confirme pelo link do e-mail |
-| "Não foi possível criar a conta… CPF já cadastrado"         | Já existe perfil com esse CPF                    | Use outro CPF ou deixe o campo em branco           |
-| Consultas de exemplo com datas velhas                       | O seed foi rodado há dias                        | Rode `db/seed.sql` de novo                         |
+| Sintoma                                                                   | Causa provável                                          | O que fazer                                                                         |
+| :------------------------------------------------------------------------ | :------------------------------------------------------ | :---------------------------------------------------------------------------------- |
+| Workflow **Deploy** falha em _Conferir as credenciais_                    | Secrets não cadastrados, ou chave `service_role`        | Passos 3 e 4 (use a chave **anon**)                                                 |
+| Workflow falha em _Conferir se o banco tem a migration 002_               | O SQL não foi executado nesse projeto                   | Passo 1                                                                             |
+| Deploy falha em _configure-pages_ ("Get Pages site failed")               | Pages não habilitado                                    | Passo 5                                                                             |
+| Site abre em 404                                                          | Deploy ainda não rodou ou falhou                        | Veja a aba _Actions_                                                                |
+| "E-mail ou senha inválidos" com as contas do seed                         | Seed não rodou neste projeto                            | Rode `db/seed.sql` (passo 1)                                                        |
+| Entra com a senha certa e aparece "Você não tem permissão para esta ação" | Projeto Supabase novo não concede privilégio às tabelas | Rode a `db/migrations/002_agendamento_v1.sql` **inteira** (seção 13; é idempotente) |
+| "O banco de dados ainda não tem a função …"                               | Migration 002 ausente                                   | Rode `db/migrations/002_agendamento_v1.sql`                                         |
+| Cadastro diz "Confirme seu e-mail"                                        | _Confirm email_ ligado                                  | Desative (passo 2) ou confirme pelo link do e-mail                                  |
+| "Não foi possível criar a conta… CPF já cadastrado"                       | Já existe perfil com esse CPF                           | Use outro CPF ou deixe o campo em branco                                            |
+| Consultas de exemplo com datas velhas                                     | O seed foi rodado há dias                               | Rode `db/seed.sql` de novo                                                          |
 
 ---
 

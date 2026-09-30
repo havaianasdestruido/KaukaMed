@@ -82,6 +82,43 @@ begin
   raise exception 'FALHOU - %: deveria ter falhado (esperado "%")', p_label, p_msg_like;
 end $$;
 
+-- a escrita é barrada: sem privilégio na tabela (Supabase novo) ou pela RLS (Supabase com
+-- privilégios padrão). Os dois erros têm o mesmo SQLSTATE 42501 (insufficient_privilege).
+create function t.blocked(p_sql text, p_label text) returns void
+language plpgsql as $$
+declare v_state text; v_msg text;
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+    if v_state <> '42501' then
+      raise exception 'FALHOU - %: erro inesperado % "%" (esperado 42501)', p_label, v_state, v_msg;
+    end if;
+    raise notice 'ok - % (erro: %)', p_label, v_msg;
+    return;
+  end;
+  raise exception 'FALHOU - %: deveria ter sido barrado', p_label;
+end $$;
+
+-- a leitura da tabela não devolve linha nenhuma: ou a RLS filtra tudo (Supabase com
+-- privilégios padrão) ou a tabela nem foi concedida ao papel (Supabase novo). Os dois protegem.
+create function t.sees_nothing(p_table text, p_label text) returns void
+language plpgsql as $$
+declare v_n bigint;
+begin
+  begin
+    execute format('select count(*) from %s', p_table) into v_n;
+  exception when insufficient_privilege then
+    raise notice 'ok - % (sem privilégio na tabela)', p_label;
+    return;
+  end;
+  if v_n <> 0 then
+    raise exception 'FALHOU - %: devolveu % linha(s)', p_label, v_n;
+  end if;
+  raise notice 'ok - % (RLS: 0 linhas)', p_label;
+end $$;
+
 -- amanhã às HH:MM no fuso da clínica
 create function t.tomorrow_at(p_time time) returns timestamptz
 language sql stable as $$
@@ -160,10 +197,10 @@ end $$;
 call t.anon();
 do $$
 begin
-  perform t.ok((select count(*) from public.appointments) = 0, 'anon não lê appointments');
-  perform t.ok((select count(*) from public.profiles) = 0, 'anon não lê profiles');
-  perform t.ok((select count(*) from public.audit_logs) = 0, 'anon não lê audit_logs');
-  perform t.ok((select count(*) from public.doctor_schedules) = 0, 'anon não lê doctor_schedules');
+  perform t.sees_nothing('public.appointments', 'anon não lê appointments');
+  perform t.sees_nothing('public.profiles', 'anon não lê profiles');
+  perform t.sees_nothing('public.audit_logs', 'anon não lê audit_logs');
+  perform t.sees_nothing('public.doctor_schedules', 'anon não lê doctor_schedules');
   perform t.fails('select * from public.list_doctors()', 'permission denied%', 'anon não executa list_doctors');
   perform t.fails('select * from public.list_appointments()', 'permission denied%', 'anon não executa list_appointments');
   perform t.fails($q$select public.book_appointment(null, now())$q$, 'permission denied%', 'anon não executa book_appointment');
@@ -187,12 +224,12 @@ begin
     'paciente edita o próprio telefone/nome');
   update public.profiles set full_name = 'T Paciente Um' where email = 'pat1@t.local';
   perform t.ok((select count(*) from public.audit_logs) = 0, 'paciente não lê audit_logs');
-  perform t.fails($q$insert into public.doctor_schedules (doctor_id, weekday, start_time, end_time)
+  perform t.blocked($q$insert into public.doctor_schedules (doctor_id, weekday, start_time, end_time)
                      select id, 1, time '08:00', time '09:00' from public.doctors limit 1$q$,
-    'new row violates row-level security%', 'paciente não grava doctor_schedules');
-  perform t.fails($q$insert into public.doctor_specialties (doctor_id, specialty_id)
+    'paciente não grava doctor_schedules');
+  perform t.blocked($q$insert into public.doctor_specialties (doctor_id, specialty_id)
                      select d.id, d.specialty_id from public.doctors d limit 1$q$,
-    'new row violates row-level security%', 'paciente não grava doctor_specialties');
+    'paciente não grava doctor_specialties');
   perform t.ok((select count(*) from public.doctor_schedules) > 0, 'paciente lê a grade de horários');
 end $$;
 

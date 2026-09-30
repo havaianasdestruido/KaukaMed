@@ -6,14 +6,14 @@ permissões valem para qualquer cliente, e não apenas para a tela.
 
 ## Arquivos
 
-| Arquivo                                          | O que é                                                                                                                                                         |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kaukamed_schema.sql`                            | Schema base: 14 tabelas, enums, índices, RLS e dados de referência (especialidades, convênios e a unidade).                                                     |
-| `migrations/001_frontend_support.sql`            | Migration do front-end: gatilho `handle_new_user` (perfil no cadastro), trava de `role` e RLS de especialidades, unidades e convênios. A 002 refina parte dela. |
-| `migrations/002_agendamento_v1.sql`              | Agenda da versão 1: grade de horários, RPCs de agendar/remarcar/mudar status/listar, travas de papel e de escrita direta. Idempotente.                          |
-| `seed.sql`                                       | Dados de **demonstração**: um usuário por papel, três dentistas com agenda e 12 consultas (datas relativas a hoje). Idempotente.                                |
-| `tests/002_agendamento.test.sql`                 | 111 asserções das regras do banco. Roda dentro de uma transação e termina em `rollback`: não deixa dados.                                                       |
-| `../docker/postgres/init/00-supabase-compat.sql` | Só para o Postgres local: cria `auth.users`, `auth.uid()` e os papéis `anon`/`authenticated`/`service_role` que no Supabase já existem.                         |
+| Arquivo                                          | O que é                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kaukamed_schema.sql`                            | Schema base: 14 tabelas, enums, índices, RLS e dados de referência (especialidades, convênios e a unidade).                                                                                                                                                                     |
+| `migrations/001_frontend_support.sql`            | Migration do front-end: gatilho `handle_new_user` (perfil no cadastro), trava de `role` e RLS de especialidades, unidades e convênios. A 002 refina parte dela.                                                                                                                 |
+| `migrations/002_agendamento_v1.sql`              | Agenda da versão 1: grade de horários, RPCs de agendar/remarcar/mudar status/listar, travas de papel e de escrita direta. Idempotente.                                                                                                                                          |
+| `seed.sql`                                       | Dados de **demonstração**: um usuário por papel, três dentistas com agenda e 12 consultas (datas relativas a hoje). Idempotente.                                                                                                                                                |
+| `tests/002_agendamento.test.sql`                 | 111 asserções das regras do banco. Roda dentro de uma transação e termina em `rollback`: não deixa dados.                                                                                                                                                                       |
+| `../docker/postgres/init/00-supabase-compat.sql` | Só para o Postgres local: cria `auth.users`, `auth.uid()` e os papéis `anon`/`authenticated`/`service_role` que no Supabase já existem. **Não** dá privilégio automático às tabelas (como nos projetos criados depois de 30/05/2026): quem precisa de acesso declara o `GRANT`. |
 
 ## Ordem de aplicação
 
@@ -96,6 +96,7 @@ Regras principais (todas cobertas por `tests/002_agendamento.test.sql`):
 
 - **Papel**: o cadastro sempre cria `PATIENT` (qualquer `role` enviada é ignorada) e só `ADMIN` muda `role`/`is_active`.
 - **CPF**: gravado normalizado (`000.000.000-00`); inválido vira `NULL` em vez de travar o cadastro; duplicado é recusado.
+- **Privilégios de tabela (seção 13 da 002)**: `authenticated` lê (a RLS filtra as linhas) e atualiza o próprio perfil; `anon` não toca em tabela nenhuma; o resto passa pelas funções acima. O Supabase **não concede mais isso sozinho** em projetos criados a partir de 30/05/2026 (e, desde 30/10/2026, nas tabelas novas de qualquer projeto): sem esses `GRANT`s o login falha com `permission denied for table profiles`. Tabela nova que o app leia ou escreva direto = `GRANT` novo na migration. O CI emula esse regime (compat sem privilégios automáticos) e os testes valem nos dois.
 - **Escrita em `appointments`**: nenhum papel da API faz `insert`/`update`/`delete` direto — só pelas funções acima.
 - **Agenda**: o horário precisa estar na grade do dentista (`doctor_schedules`), no futuro e em até 180 dias; o fuso é `America/Sao_Paulo`. Sem duplo agendamento do dentista nem do paciente.
 - **Preço, status, local e autor** vêm do banco, nunca do cliente. O convênio precisa ser do paciente, estar `ACTIVE` e não vencido.
