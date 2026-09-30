@@ -135,7 +135,8 @@ Dividido pelos quatro papéis da equipe ([`TASKS.md`](../TASKS.md): 2 back-end, 
 |  🟡  | Remover do menu (ou ligar ao banco) as telas ilustrativas: faturamento TISS, salas, dashboard e relatórios                                                   |
 |  🟡  | Paginação na agenda e em pacientes (hoje: até 500 consultas por busca)                                                                                       |
 |  🟡  | Logo e imagens dentro do repositório (hoje vêm de URLs do Google AI Studio e as fontes, do Google Fonts)                                                     |
-|  🟡  | Revisão de responsividade mobile e de acessibilidade (foco, contraste); _skeletons_ padronizados                                                             |
+|  🟡  | Celular: menu lateral fixo de 80 px (recolher/abrir) e tabelas largas; acessibilidade: _focus trap_ nos modais, foco e contraste; _skeletons_ padronizados   |
+|  🟡  | Avisar quando o link do e-mail (recuperação/confirmação) expirou: o Supabase volta com `#error_code=otp_expired` e hoje o app só mostra o login              |
 |  🟢  | Divisão do bundle (765 kB, 191 kB gzip), testes E2E com Playwright nas 4 jornadas                                                                            |
 
 ### 🗓️ BE-A — Agenda e prontuário
@@ -172,21 +173,24 @@ Dividido pelos quatro papéis da equipe ([`TASKS.md`](../TASKS.md): 2 back-end, 
 
 ## 🧪 Como foi validado — e o que não foi
 
-| O quê                                                                                                          | Resultado                                   |
-| :------------------------------------------------------------------------------------------------------------- | :------------------------------------------ |
-| Regras do banco: 111 asserções SQL (papéis, RLS, agenda, status, 2 h, convênio) em PostgreSQL 17               | ✅ passam; migration e seed idempotentes    |
-| Front-end: 95 testes (regras puras, gateways, mappers e 7 fluxos de tela no modo demonstração)                 | ✅ passam                                   |
-| App real × funções SQL reais: 7 fluxos (login, agendar/cancelar, recepção, dentista, cadastro)                 | ✅ passam                                   |
-| Contrato: parâmetros das chamadas ao banco conferidos contra o próprio SQL                                     | ✅ (quebra se o nome de um parâmetro mudar) |
-| `lint`, `typecheck`, `build`; bundle sem `service_role`; workflows validados contra o schema do GitHub Actions | ✅                                          |
+| O quê                                                                                                                                                    | Resultado                                    |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| Regras do banco: 111 asserções SQL (papéis, RLS, agenda, status, 2 h, convênio) em PostgreSQL 17                                                         | ✅ passam; migration e seed idempotentes     |
+| Front-end: 107 testes (regras puras, gateways, mappers, 8 fluxos de tela no modo demonstração e 8 de recuperação de senha/sessão)                        | ✅ passam                                    |
+| App real × funções SQL reais: 7 fluxos (login, agendar/cancelar, recepção, dentista, cadastro)                                                           | ✅ passam (exigem um Postgres; o CI sobe um) |
+| Navegador real (Chromium headless): todas as telas dos 4 papéis em desktop e em 390 px, e o fluxo de recuperação de senha com o `supabase-js` de verdade | ✅ sem erros no console (backend simulado)   |
+| Contrato: parâmetros das chamadas ao banco conferidos contra o próprio SQL                                                                               | ✅ (quebra se o nome de um parâmetro mudar)  |
+| `lint`, `typecheck`, `build`; bundle sem `service_role`; workflows validados contra o schema do GitHub Actions                                           | ✅                                           |
 
 **O que NÃO foi validado** (não havia acesso de administrador nem rede para o Supabase/GitHub neste ambiente):
 
 - o **projeto Supabase real**: PostgREST, GoTrue (login do seed, e-mails de confirmação/recuperação) e a
-  execução do SQL no _SQL Editor_;
-- o **GitHub Pages**: a primeira execução dos workflows `Deploy` e `CI`;
-- um **navegador de verdade** (layout mobile, fontes e imagens externas) — só jsdom;
-- a recuperação de senha com e-mail real.
+  execução do SQL no _SQL Editor_ — no navegador, o GoTrue e o PostgREST foram **simulados**;
+- o **GitHub Pages**: a primeira execução do workflow `Deploy` (o `CI` roda no Pull Request);
+- as **fontes e imagens externas** (Google Fonts e logotipos hospedados fora do repositório): no teste de
+  navegador foram trocadas por substitutos locais, então o carregamento real delas não foi visto;
+- a **recuperação de senha com e-mail real**: o caminho "link → tela de nova senha → senha trocada" foi
+  exercitado, mas o envio do e-mail e as _Redirect URLs_ do Supabase dependem do projeto real.
 
 O `Deploy` foi escrito para falhar cedo e dizer o motivo: secrets ausentes, chave `service_role`, projeto
 sem a migration 002 ou chave inválida.
