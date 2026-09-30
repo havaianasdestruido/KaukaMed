@@ -1,0 +1,112 @@
+# Integração contínua: roda em todo Pull Request e em pushes para a main.
+#
+#  - web:      lint, typecheck, testes do front-end e build de produção.
+#  - database: aplica compat + schema + migrations + seed num PostgreSQL 17 limpo, roda as
+#              111 asserções SQL e os testes do front-end contra as funções SQL reais. O compat
+#              imita um projeto Supabase novo (sem GRANT automático nas tabelas): uma migration
+#              que dependa de privilégio implícito reprova aqui, não no projeto do usuário.
+#
+# Não usa nenhum segredo: o build aqui roda em modo demonstração (sem Supabase).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Front-end (lint, tipos, testes, build)
+    # Runner fixo: o rótulo ubuntu-latest passa a apontar para o Ubuntu 26 em 19/10/2026.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # O postinstall da raiz já compila o pacote @kaukamed/shared.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build de produção
+        run: npm run build -w @kaukamed/web
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+
+  database:
+    name: Banco de dados (SQL + integração com o front-end)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kaukamed
+          TZ: UTC
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kaukamed"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: kaukamed
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Mesma ordem do README do banco (e do docker-compose.yml).
+      - name: Aplicar compat, schema e migrations
+        run: |
+          for file in \
+            docker/postgres/init/00-supabase-compat.sql \
+            db/kaukamed_schema.sql \
+            db/migrations/001_frontend_support.sql \
+            db/migrations/002_agendamento_v1.sql; do
+            echo "::group::$file"
+            psql -v ON_ERROR_STOP=1 -q -f "$file"
+            echo "::endgroup::"
+          done
+
+      - name: A migration 002 é idempotente (reaplicar não pode falhar)
+        run: psql -v ON_ERROR_STOP=1 -q -f db/migrations/002_agendamento_v1.sql
+
+      - name: Testes SQL (regras do banco)
+        run: psql -v ON_ERROR_STOP=1 -f db/tests/002_agendamento.test.sql
+
+      - name: 'Seed de demonstração (duas vezes: precisa ser idempotente)'
+        run: |
+          psql -v ON_ERROR_STOP=1 -q -f db/seed.sql
+          psql -v ON_ERROR_STOP=1 -q -f db/seed.sql
+
+      - name: Front-end contra as funções SQL reais
+        run: npm test -w @kaukamed/web
+        env:
+          KAUKAMED_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/kaukamed

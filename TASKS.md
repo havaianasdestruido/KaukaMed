@@ -20,13 +20,19 @@ Entrega 1° Versão
 -se precisar de login e senha disponibilizar para professor
 -anexar essa tarefa, um MD com: link aplicação hospedada no github pages, os dados de login da app, e uma lista do que falta finalizar.
 
+**STATUS: EM ANDAMENTO — código, testes, workflow de deploy e MD prontos.** O MD pedido é o
+[docs/ENTREGA-V1.md](docs/ENTREGA-V1.md) (link, logins e backlog). Para concluir falta só a parte que
+exige acesso de administrador ao GitHub/Supabase (habilitar o Pages, cadastrar os 2 secrets, rodar o SQL
+de `db/` e conferir o link publicado) — passo a passo no início do MD.
+
 6
 Fazer documentação do sistema
 -enviar os arquivos SPEC.MD e o esquema do banco de dados para o IA
+
 - solicite a geração individual do seguinte esquema: diagrama de classes, diagrama de entidade e relacionamento, e dps exportar as imagens dos diagramas gerados
--anexe no IA: SPEC.MD, o diagrama de classes e as capturas de telas do sistema, dps fazer um prompt: a partir da informacoes anexadas, gere um manual completo de uso do sistema e dps exporte a resposta para o google docs, adicione a identidade visual do sistema e salve como PDF
--anexe no IA: o logotipo e o arquivo DESIGN.MD, e envie:"a partir dos arquivos anexados crie um manual de identidade visual do sistema, e dps exporte o conteudo pro google docs/slide/canva e ajuste a formatação e salve como PDF
--Reuna todos os arquivos feitos(diagramas IA e manuais em PDF) em 1 pasta. e dps compacte a pasta no formato .zip e faca o envio final
+  -anexe no IA: SPEC.MD, o diagrama de classes e as capturas de telas do sistema, dps fazer um prompt: a partir da informacoes anexadas, gere um manual completo de uso do sistema e dps exporte a resposta para o google docs, adicione a identidade visual do sistema e salve como PDF
+  -anexe no IA: o logotipo e o arquivo DESIGN.MD, e envie:"a partir dos arquivos anexados crie um manual de identidade visual do sistema, e dps exporte o conteudo pro google docs/slide/canva e ajuste a formatação e salve como PDF
+  -Reuna todos os arquivos feitos(diagramas IA e manuais em PDF) em 1 pasta. e dps compacte a pasta no formato .zip e faca o envio final
 
 7
 Entrega da versão final
@@ -38,6 +44,5 @@ Apresentação
 -15 minutos de apresentacao
 -os professores perguntaram
 -nao precisa nada impresso, mas gere um qr code para acesso(o sistema hospidado do github e documentação do sistema)
-
 
 divide essas tarefas para 4 pessoas, sendo 2 back end, 1 banco de dados e a outra front end

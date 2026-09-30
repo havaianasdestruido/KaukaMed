@@ -4,17 +4,20 @@ Plataforma de gestão clínica (agendamento de consultas, prontuário eletrônic
 planos de saúde/convênios e controle de acesso por papéis), construída a partir da
 stack definida em [`SPEC.md`](./SPEC.md) e organizada em fases no [`TODO.md`](./TODO.md).
 
-> **Status:** Phase 0 (setup do projeto) concluída — próximo passo é a Phase 1
-> (PostgreSQL + Prisma e modelagem do banco). Acompanhe em [`TODO.md`](./TODO.md).
+> **Status:** **Entrega 5 — primeira versão (V1)** pronta: login, cadastro, agendamento e
+> consultas funcionando com dados reais no Supabase. O link publicado, as contas de teste e o
+> que ainda falta estão em [`docs/ENTREGA-V1.md`](./docs/ENTREGA-V1.md). O plano geral está em
+> [`TODO.md`](./TODO.md).
 
 ## 🧱 Stack
 
-| Camada             | Tecnologias                             |
-| :----------------- | :-------------------------------------- |
-| **Frontend**       | Next.js (App Router), React, TypeScript |
-| **Backend**        | Node.js, NestJS, TypeScript             |
-| **Banco de dados** | PostgreSQL (Prisma ORM) e Redis         |
-| **Qualidade**      | ESLint, Prettier, Husky + lint-staged   |
+| Camada             | Tecnologias                                                                          |
+| :----------------- | :----------------------------------------------------------------------------------- |
+| **Frontend**       | Vite, React 19, TypeScript, Tailwind 4 — publicado no GitHub Pages                   |
+| **Backend (V1)**   | Supabase: Auth + PostgREST + funções SQL (`security definer`) com RLS                |
+| **Banco de dados** | PostgreSQL (Supabase em produção, Docker Compose em desenvolvimento)                 |
+| **Backend futuro** | `apps/api` (NestJS): esqueleto, fora do caminho crítico da V1                        |
+| **Qualidade**      | ESLint, Prettier, Husky + lint-staged, Vitest + Testing Library, GitHub Actions (CI) |
 
 > Consulte o [`SPEC.md`](./SPEC.md) para o detalhamento de cada tecnologia e o
 > schema do banco em [`db/kaukamed_schema.sql`](./db/kaukamed_schema.sql).
@@ -26,14 +29,25 @@ kaukamed/
 ├── apps/
 │   ├── api/            # Backend NestJS (API REST em /api/v1)
 │   │   └── src/config/ # Validação das variáveis de ambiente (Zod)
-│   └── web/            # Frontend Next.js (App Router)
-│       └── src/config/ # Variáveis públicas do front-end
+│   └── web/            # Frontend Vite + React (telas OdontoAura) — ver docs/FRONTEND.md
+│       ├── src/lib/      # Regras puras (fuso, CPF, acesso por papel, grade) + cliente Supabase
+│       ├── src/services/ # Acesso a dados: gateway Supabase (RPCs) e gateway de demonstração
+│       └── src/integration/ # Testes do app contra o PostgreSQL real (opcionais)
 ├── packages/
 │   └── shared/         # Tipos e contratos TypeScript compartilhados
 ├── docker/
 │   └── postgres/init/  # Scripts de inicialização do PostgreSQL local
 ├── db/
-│   └── kaukamed_schema.sql
+│   ├── kaukamed_schema.sql   # Schema base
+│   ├── migrations/           # 001 (front-end) e 002 (agendamento v1)
+│   ├── seed.sql              # Contas e consultas de demonstração
+│   ├── tests/                # Testes SQL das regras do banco
+│   └── README.md             # Ordem de aplicação, contas de teste, testes
+├── docs/
+│   ├── ENTREGA-V1.md         # Entrega 5: link, logins e backlog
+│   ├── FRONTEND.md           # Setup, modos de dados e arquitetura do front-end
+│   └── tasks/                # Quebra da SPEC em tarefas (com o progresso da V1)
+├── .github/workflows/        # CI (lint, tipos, testes, SQL) e deploy no GitHub Pages
 ├── .husky/pre-commit   # Hook que roda ESLint + Prettier nos arquivos alterados
 ├── docker-compose.yml  # PostgreSQL + Redis para desenvolvimento
 ├── eslint.config.mjs   # Regras ESLint comuns do monorepo
@@ -85,16 +99,21 @@ npm run infra:up
 npm run dev
 ```
 
-- Front-end (Next.js): http://localhost:3000
+- Front-end (Vite): http://localhost:3000
 - API (NestJS): http://localhost:3333/api/v1
+
+> **Só quer ver o front-end?** `npm install && npm run dev:web` — sem as variáveis do Supabase ele
+> sobe em **modo demonstração** (dados de exemplo em memória, troca de perfil no menu do usuário).
+> Para falar com um banco de verdade, preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` em
+> `apps/web/.env.local` (veja [`docs/FRONTEND.md`](./docs/FRONTEND.md)).
 
 ### 🔐 Variáveis de ambiente
 
-| Arquivo                 | Responsabilidade                                                            |
-| :---------------------- | :-------------------------------------------------------------------------- |
-| `.env.example`          | Variáveis do Docker Compose (PostgreSQL/Redis) usadas pelos scripts da raiz |
-| `apps/api/.env.example` | API NestJS: `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `REDIS_URL`         |
-| `apps/web/.env.example` | Front-end Next.js: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_API_URL`            |
+| Arquivo                 | Responsabilidade                                                                |
+| :---------------------- | :------------------------------------------------------------------------------ |
+| `.env.example`          | Variáveis do Docker Compose (PostgreSQL/Redis) usadas pelos scripts da raiz     |
+| `apps/api/.env.example` | API NestJS: `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `REDIS_URL`             |
+| `apps/web/.env.example` | Front-end Vite: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_BASE_PATH` |
 
 Os arquivos `.env` reais **não** são versionados (veja o `.gitignore`); apenas os
 `.env.example` ficam no repositório. Ambos os lados carregam os arquivos na mesma
@@ -112,8 +131,13 @@ Na API, todas as variáveis são validadas no bootstrap com **Zod**
 (`apps/api/src/config/env.validation.ts`): se algum valor estiver faltando ou fora do
 formato, a aplicação não sobe e o erro (em pt-BR) aponta exatamente a variável
 problemática. No front-end, as variáveis públicas são centralizadas em
-`apps/web/src/config/env.ts` — apenas chaves com prefixo `NEXT_PUBLIC_` chegam ao
-navegador, então **nunca** coloque segredos nelas.
+`apps/web/src/lib/env.ts` — apenas chaves com prefixo `VITE_` chegam ao
+navegador, então **nunca** coloque segredos nelas. Sem as variáveis do Supabase o
+front-end sobe em **modo demonstração** (dados de exemplo).
+
+> Antes de usar o front-end com o Supabase, aplique no banco — nesta ordem — o schema, as
+> migrations `001` e `002` e (para demonstração) o `seed.sql`. Passo a passo e contas de teste em
+> [`db/README.md`](./db/README.md); detalhes do front-end em [`docs/FRONTEND.md`](./docs/FRONTEND.md).
 
 ## 📜 Scripts disponíveis
 
@@ -121,7 +145,7 @@ navegador, então **nunca** coloque segredos nelas.
 | :---------------------------------------- | :------------------------------------------------- |
 | `npm run dev`                             | Sobe API e front-end em modo watch (paralelo)      |
 | `npm run dev:api`                         | Sobe apenas a API NestJS                           |
-| `npm run dev:web`                         | Sobe apenas o front-end Next.js                    |
+| `npm run dev:web`                         | Sobe apenas o front-end (Vite)                     |
 | `npm run build`                           | Compila todos os pacotes em ordem de dependência   |
 | `npm run typecheck`                       | Valida os tipos TypeScript de todos os pacotes     |
 | `npm run lint`                            | Executa o ESLint em todos os pacotes               |
@@ -132,6 +156,8 @@ navegador, então **nunca** coloque segredos nelas.
 | `npm run infra:logs`                      | Acompanha os logs dos contêineres                  |
 | `npm run infra:reset`                     | Derruba a infraestrutura e apaga os volumes        |
 | `npm run db:psql` / `npm run db:redis`    | Abre o `psql`/`redis-cli` no contêiner             |
+| `npm run db:test`                         | Roda os testes SQL das regras do banco (Docker)    |
+| `npm run db:seed`                         | Reaplica os dados de demonstração (Docker)         |
 
 ## 🐳 Infraestrutura local (Docker Compose)
 
@@ -153,6 +179,9 @@ Na **primeira subida** (volume vazio), o PostgreSQL executa os scripts montados 
    `db/kaukamed_schema.sql` foi escrito para o Supabase e referencia esses objetos.
 2. `db/kaukamed_schema.sql` — schema do KaukaMed (tabelas, enums, índices, políticas
    de RLS e seed de especialidades).
+3. `db/migrations/001_frontend_support.sql` e 4. `db/migrations/002_agendamento_v1.sql` —
+   suporte ao front-end e regras da agenda (funções SQL chamadas pelo app).
+4. `db/seed.sql` — usuários de demonstração (um por papel) e consultas de exemplo.
 
 Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:reset`
 (apaga os volumes) e `npm run infra:up` novamente.
@@ -162,11 +191,36 @@ Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:res
 > `anon`/`authenticated` (o caso do acesso direto pelo cliente Supabase). A
 > autorização por papel na API é responsabilidade dos Guards (Phase 3).
 
+## 🌐 Publicação (GitHub Pages + Supabase)
+
+O workflow [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) publica o front-end a
+cada push na `main`, em `https://<usuário>.github.io/<repositório>/` (para este repositório:
+<https://havaianasdestruido.github.io/KaukaMed/>). Configuração única, feita por quem administra o
+repositório:
+
+1. **Settings → Pages → Source: GitHub Actions.**
+2. **Settings → Secrets and variables → Actions:** `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+   (somente a chave **anon/publishable** — o workflow recusa a `service_role`).
+3. No Supabase: rodar o SQL de `db/` e cadastrar a URL publicada em **Authentication → URL
+   Configuration** (veja [`db/README.md`](./db/README.md)).
+
+Contas de teste, link e backlog: [`docs/ENTREGA-V1.md`](./docs/ENTREGA-V1.md).
+
+## 🧪 Testes
+
+| Comando                                                  | O que roda                                                                        |
+| :------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `npm test`                                               | Vitest do front-end: regras puras, gateways, mappers e fluxos de tela (modo demo) |
+| `npm run db:test`                                        | 111 asserções SQL das regras do banco (Docker Compose no ar)                      |
+| `KAUKAMED_TEST_DATABASE_URL=… npm test -w @kaukamed/web` | Inclui o app real contra as funções SQL do banco local                            |
+
+O CI (`.github/workflows/ci.yml`) roda tudo isso a cada Pull Request, num PostgreSQL limpo.
+
 ## 🧹 Qualidade de código
 
 - **ESLint (flat config)**: `eslint.config.mjs` na raiz define as regras comuns do
   monorepo e cada app estende essa base — `apps/api/eslint.config.mjs` (ambiente Node)
-  e `apps/web/eslint.config.mjs` (regras do Next.js/Core Web Vitals).
+  e `apps/web/eslint.config.mjs` (front-end React/Vite, globais de navegador).
 - **Prettier**: configuração única em `.prettierrc.json` (100 colunas, aspas simples,
   vírgula final). Rode `npm run format` antes de enviar alterações.
 - **Husky + lint-staged**: o hook `pre-commit` roda `eslint --fix` e `prettier --write`
@@ -174,7 +228,7 @@ Para recriar o banco do zero depois de alterar o schema, rode `npm run infra:res
   `npm install` (script `prepare` → `husky`). Como o ESLint resolve as regras a partir
   do diretório de execução, `lint-staged.config.mjs` agrupa os arquivos por pacote e
   usa `scripts/eslint-no-pacote.mjs` para rodar o lint com o `cwd` de cada app — assim
-  as regras do NestJS (`apps/api`) e do Next.js (`apps/web`) valem também no commit.
+  as regras do NestJS (`apps/api`) e do front-end (`apps/web`) valem também no commit.
 - **NestJS + injeção de dependência**: classes injetadas (ex.: `ConfigService`) precisam
   ser importadas como valor, nunca com `import type`, pois a metadata gerada pelo
   `emitDecoratorMetadata` é o que permite ao Nest resolver as dependências em tempo de

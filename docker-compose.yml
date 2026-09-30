@@ -12,6 +12,10 @@
 # os scripts montados em /docker-entrypoint-initdb.d:
 #   00-supabase-compat.sql  -> schema `auth`, funções e papéis equivalentes ao Supabase
 #   01-kaukamed-schema.sql  -> schema do KaukaMed (db/kaukamed_schema.sql)
+#   02-frontend-support.sql -> migration 001 (db/migrations/001_frontend_support.sql)
+#   03-agendamento-v1.sql   -> migration 002 (db/migrations/002_agendamento_v1.sql)
+#   04-seed.sql             -> usuários e consultas de demonstração (db/seed.sql)
+# Ordem e passo a passo em db/README.md.
 # ============================================================================
 name: kaukamed
 
@@ -34,6 +38,9 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init/00-supabase-compat.sql:/docker-entrypoint-initdb.d/00-supabase-compat.sql:ro
       - ./db/kaukamed_schema.sql:/docker-entrypoint-initdb.d/01-kaukamed-schema.sql:ro
+      - ./db/migrations/001_frontend_support.sql:/docker-entrypoint-initdb.d/02-frontend-support.sql:ro
+      - ./db/migrations/002_agendamento_v1.sql:/docker-entrypoint-initdb.d/03-agendamento-v1.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-kaukamed} -d ${POSTGRES_DB:-kaukamed}']
       interval: 10s

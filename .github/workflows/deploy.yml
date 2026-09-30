@@ -1,0 +1,163 @@
+# Publica o front-end (apps/web) no GitHub Pages a cada push na main.
+#
+# Antes da primeira execução (uma vez só, feito por quem administra o repositório):
+#   1. Settings → Pages → Build and deployment → Source: "GitHub Actions".
+#   2. Settings → Secrets and variables → Actions → New repository secret:
+#        VITE_SUPABASE_URL        (Project URL do Supabase)
+#        VITE_SUPABASE_ANON_KEY   (chave pública: "sb_publishable_…" ou a "anon" antiga — NUNCA a secret/service_role)
+#   3. No Supabase, rodar o SQL de db/ (veja db/README.md).
+# Depois de configurar, basta um push na main — ou rodar este workflow manualmente
+# (Actions → Deploy → Run workflow).
+#
+# As credenciais entram no bundle só na hora do build. A anon key é pública por
+# natureza; quem protege os dados é o RLS e as funções do banco.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Um deploy por vez; o que já está em andamento termina antes do próximo começar.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+
+jobs:
+  build:
+    name: Build
+    # Runner fixo: o rótulo ubuntu-latest passa a apontar para o Ubuntu 26 em 19/10/2026.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Conferir as credenciais do Supabase
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error title=Credenciais ausentes::Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em Settings → Secrets and variables → Actions. Sem elas o site publicaria em modo demonstração, sem banco."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            https://*) ;;
+            *) echo "::error title=URL inválida::VITE_SUPABASE_URL deve começar com https:// (ex.: https://abcd1234.supabase.co)."; exit 1 ;;
+          esac
+
+          # Só a chave pública pode ir para o navegador: recusa service_role / secret keys.
+          node -e '
+            const key = process.env.VITE_SUPABASE_ANON_KEY.trim();
+            if (key.startsWith("sb_secret_")) {
+              console.log("::error title=Chave secreta no front-end::VITE_SUPABASE_ANON_KEY parece uma secret key. Use a chave anon/publishable.");
+              process.exit(1);
+            }
+            if (key.startsWith("sb_publishable_")) process.exit(0);
+            try {
+              const payload = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString("utf8"));
+              if (payload.role !== "anon") {
+                console.log(`::error title=Chave errada::a chave informada tem role "${payload.role}". Use a chave pública (Publishable key ou anon) — nunca a service_role.`);
+                process.exit(1);
+              }
+            } catch {
+              console.log("::warning title=Chave não reconhecida::não consegui ler a chave como JWT; confira se é a anon/publishable key.");
+            }
+          '
+
+      # Falha cedo e explica o motivo se o projeto Supabase ainda não recebeu o SQL.
+      # A anon key NÃO pode executar as funções (só usuários logados): então "permission
+      # denied" é o resultado esperado; 404/PGRST202 significa que a migration 002 não foi aplicada.
+      - name: Conferir se o banco tem a migration 002
+        run: |
+          body=$(mktemp)
+          # As chaves novas (sb_publishable_…) não são JWT: vão só no cabeçalho apikey.
+          # A chave anon antiga (JWT) também vai em Authorization, como o supabase-js faz.
+          auth=()
+          case "$VITE_SUPABASE_ANON_KEY" in
+            sb_*) ;;
+            *) auth=(-H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY") ;;
+          esac
+          status=$(curl -sS -m 30 -o "$body" -w '%{http_code}' -X POST \
+            "${VITE_SUPABASE_URL%/}/rest/v1/rpc/list_doctors" \
+            -H "apikey: $VITE_SUPABASE_ANON_KEY" \
+            "${auth[@]}" \
+            -H "Content-Type: application/json" -d '{}' || true)
+          status=${status:-000}
+          echo "HTTP $status"
+          head -c 400 "$body"; echo
+          if grep -qi 'invalid api key' "$body"; then
+            echo "::error title=Chave inválida::o Supabase recusou a VITE_SUPABASE_ANON_KEY. Copie de novo em Project Settings → API."
+            exit 1
+          elif grep -q 'PGRST202' "$body"; then
+            echo "::error title=Banco sem a migration 002::execute db/migrations/002_agendamento_v1.sql no SQL Editor do Supabase (veja db/README.md)."
+            exit 1
+          elif [ "$status" = "000" ] || [ "${status:0:1}" = "5" ]; then
+            echo "::warning title=Supabase inacessível::não consegui validar o banco agora (HTTP $status); o deploy segue."
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build de produção
+        run: npm run build -w @kaukamed/web
+        env:
+          # https://<usuario>.github.io/<repositório>/
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+
+      # Páginas desconhecidas voltam para o app (o GitHub Pages serve 404.html).
+      - name: Fallback de 404
+        run: cp apps/web/dist/index.html apps/web/dist/404.html
+
+      - name: Garantir que nenhuma chave secreta foi parar no bundle
+        run: |
+          if grep -rIl --include='*.js' --include='*.html' -e 'service_role' -e 'sb_secret_' apps/web/dist; then
+            echo "::error title=Segredo no bundle::encontrei service_role/sb_secret_ no resultado do build."
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: Publicar no GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Teste de fumaça do site publicado
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -m 20 "$SITE_URL" | grep -qi 'OdontoAura'; then
+              echo "Site no ar: $SITE_URL"
+              exit 0
+            fi
+            echo "tentativa $attempt: ainda não respondeu, aguardando…"
+            sleep 10
+          done
+          echo "::error title=Site fora do ar::$SITE_URL não respondeu com o app depois de 1 minuto."
+          exit 1
