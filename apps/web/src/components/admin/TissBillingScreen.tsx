@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { DemoNotice } from '../common/DemoNotice';
 
 export const TissBillingScreen: React.FC = () => {
   const {
@@ -41,6 +42,7 @@ export const TissBillingScreen: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-6 pb-16">
+      <DemoNotice feature="Faturamento TISS" />
       {/* Breadcrumb & Top Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">

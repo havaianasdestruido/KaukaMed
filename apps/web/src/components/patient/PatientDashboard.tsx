@@ -1,333 +1,382 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import { ASSETS } from '../../data/mockData';
+import React, { useMemo, useState } from 'react';
 
+import { useApp } from '../../context/AppContext';
+import { bucketOf, nextAppointment, statusBadge } from '../../lib/appointmentRules';
+import { describeDistance, todayKey } from '../../lib/clinicTime';
+import { downloadIcs } from '../../lib/ics';
+import { normalizeText } from '../../lib/text';
+
+const SPECIALTIES = [
+  {
+    id: 'clinica-geral',
+    title: 'Clínica Geral',
+    desc: 'Limpeza e prevenção',
+    icon: 'dentistry',
+    category: 'Todos os Cuidados',
+  },
+  {
+    id: 'ortodontia',
+    title: 'Ortodontia',
+    desc: 'Aparelhos invisíveis',
+    icon: 'align_horizontal_center',
+    category: 'Aparelhos & Alinhadores',
+  },
+  {
+    id: 'odontopediatria',
+    title: 'Odontopediatria',
+    desc: 'Cuidado humanizado',
+    icon: 'child_care',
+    category: 'Saúde Infantil',
+  },
+  {
+    id: 'implantodontia',
+    title: 'Implantodontia',
+    desc: 'Próteses fixas & carga',
+    icon: 'build',
+    category: 'Cirurgias & Implantes',
+  },
+  {
+    id: 'endodontia',
+    title: 'Endodontia',
+    desc: 'Tratamento de canal',
+    icon: 'biotech',
+    category: 'Cirurgias & Implantes',
+  },
+  {
+    id: 'harmonizacao',
+    title: 'Harmonização',
+    desc: 'Estética orofacial',
+    icon: 'face_retouching_natural',
+    category: 'Estética Dental',
+  },
+];
+
+const FILTER_CHIPS = [
+  'Todos os Cuidados',
+  'Estética Dental',
+  'Cirurgias & Implantes',
+  'Aparelhos & Alinhadores',
+  'Saúde Infantil',
+];
+
+/** Painel inicial do paciente: próxima consulta, atalhos e últimas consultas (dados reais). */
 export const PatientDashboard: React.FC = () => {
-  const { currentUser, setScreen, setShowRayXModal, setShowPreConsultationModal, addToast } =
-    useApp();
+  const {
+    currentUser,
+    appointments,
+    myInsurances,
+    setScreen,
+    setBookingSpecialty,
+    setShowPreConsultationModal,
+    dataSource,
+  } = useApp();
 
   const [activeSpecialtyFilter, setActiveSpecialtyFilter] = useState('Todos os Cuidados');
   const [specialtySearch, setSpecialtySearch] = useState('');
 
-  const specialties = [
-    {
-      id: 'clinica-geral',
-      title: 'Clínica Geral',
-      desc: 'Limpeza e prevenção',
-      icon: 'dentistry',
-      category: 'Todos os Cuidados',
-    },
-    {
-      id: 'ortodontia',
-      title: 'Ortodontia',
-      desc: 'Aparelhos invisíveis',
-      icon: 'align_horizontal_center',
-      category: 'Aparelhos & Alinhadores',
-    },
-    {
-      id: 'odontopediatria',
-      title: 'Odontopediatria',
-      desc: 'Cuidado humanizado',
-      icon: 'child_care',
-      category: 'Saúde Infantil',
-    },
-    {
-      id: 'implantodontia',
-      title: 'Implantodontia',
-      desc: 'Próteses fixas & carga',
-      icon: 'build',
-      category: 'Cirurgias & Implantes',
-    },
-    {
-      id: 'endodontia',
-      title: 'Endodontia',
-      desc: 'Tratamento de canal',
-      icon: 'biotech',
-      category: 'Cirurgias & Implantes',
-    },
-    {
-      id: 'harmonizacao',
-      title: 'Harmonização',
-      desc: 'Estética orofacial',
-      icon: 'face_retouching_natural',
-      category: 'Estética Dental',
-    },
-  ];
+  const withStatus = useMemo(
+    () => appointments.filter((a) => a.dbStatus).map((a) => ({ ...a, status: a.dbStatus! })),
+    [appointments],
+  );
+  const next = nextAppointment(withStatus);
+  const upcomingCount = appointments.filter(
+    (a) => a.dbStatus && bucketOf(a.dbStatus) === 'upcoming',
+  ).length;
+  const recent = useMemo(
+    () =>
+      [...appointments]
+        .filter((a) => a.startsAt)
+        .sort((a, b) => new Date(b.startsAt!).getTime() - new Date(a.startsAt!).getTime())
+        .slice(0, 4),
+    [appointments],
+  );
 
-  const filteredSpecialties = specialties.filter((s) => {
+  const plan = myInsurances.find(
+    (i) => i.status === 'ACTIVE' && (!i.validUntil || i.validUntil >= todayKey()),
+  );
+  const firstName = currentUser.name.split(' ').slice(0, 2).join(' ');
+
+  const filteredSpecialties = SPECIALTIES.filter((s) => {
     const matchesCategory =
       activeSpecialtyFilter === 'Todos os Cuidados' || s.category === activeSpecialtyFilter;
+    const term = normalizeText(specialtySearch);
     const matchesSearch =
-      s.title.toLowerCase().includes(specialtySearch.toLowerCase()) ||
-      s.desc.toLowerCase().includes(specialtySearch.toLowerCase());
+      term === '' || normalizeText(s.title).includes(term) || normalizeText(s.desc).includes(term);
     return matchesCategory && matchesSearch;
   });
 
-  const handleAddToCalendar = () => {
-    addToast('Evento adicionado ao seu Google Agenda e sincronizado com o smartphone.', 'success');
+  const goBook = (specialty: string | null = null) => {
+    setBookingSpecialty(specialty);
+    setScreen('agendar');
   };
 
+  const nextBadge = next ? statusBadge(next.status) : null;
+
   return (
-    <div className="flex flex-col w-full gap-6 pb-16">
-      {/* 1. Header de Boas-vindas Tonal */}
-      <header className="relative flex flex-col md:flex-row md:items-center justify-between gap-6 bg-[#eef5f4] dark:bg-[#1a2222] rounded-[28px] p-6 sm:p-8 shadow-sm overflow-hidden border border-[#dde4e3]/60 dark:border-[#263131]">
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-[#cce8e7]/40 dark:bg-[#004f50]/20 blur-3xl pointer-events-none"></div>
-        <div className="flex items-center gap-4 z-10">
-          <div className="relative">
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover shadow-[0_2px_8px_rgba(0,40,40,0.12)] ring-4 ring-white dark:ring-[#202929]"
-            />
-            <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#005051] dark:bg-[#84d4d4] ring-4 ring-[#eef5f4] dark:ring-[#1a2222]"></span>
-          </div>
+    <div className="flex w-full flex-col gap-6 pb-16">
+      {/* 1. Boas-vindas */}
+      <header className="relative flex flex-col justify-between gap-6 overflow-hidden rounded-[28px] border border-[#dde4e3]/60 bg-[#eef5f4] p-6 shadow-sm md:flex-row md:items-center sm:p-8 dark:border-[#263131] dark:bg-[#1a2222]">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[#cce8e7]/40 blur-3xl dark:bg-[#004f50]/20"></div>
+        <div className="z-10 flex items-center gap-4">
+          <img
+            src={currentUser.avatar}
+            alt=""
+            className="h-16 w-16 rounded-full object-cover shadow-[0_2px_8px_rgba(0,40,40,0.12)] ring-4 ring-white md:h-20 md:w-20 dark:ring-[#202929]"
+          />
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-[#161d1d] dark:text-white tracking-tight">
-                Olá, {currentUser.name}
-              </h1>
-              <span className="text-2xl animate-pulse">👋</span>
-            </div>
-            <p className="text-xs sm:text-sm text-[#3e4949] dark:text-[#bec9c8] mt-1 flex items-center gap-1.5 font-medium">
-              <span className="material-symbols-outlined text-[18px] text-[#005051] dark:text-[#84d4d4]">
-                verified
+            <h1 className="text-xl font-bold tracking-tight text-[#161d1d] sm:text-2xl dark:text-white">
+              Olá, {firstName}
+            </h1>
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-[#3e4949] sm:text-sm dark:text-[#bec9c8]">
+              <span
+                aria-hidden="true"
+                className="material-symbols-outlined text-[18px] text-[#005051] dark:text-[#84d4d4]"
+              >
+                {next ? 'event_upcoming' : 'event_note'}
               </span>
-              Sua saúde bucal está em dia. Próxima consulta em 3 dias.
+              {next?.startsAt
+                ? `Sua próxima consulta é ${describeDistance(next.startsAt)}.`
+                : 'Você não tem consultas marcadas no momento.'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 z-10 shrink-0">
+        <div className="z-10 flex shrink-0 items-center gap-3">
           <button
-            onClick={() => setScreen('prontuario')}
-            className="h-10 px-5 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold text-xs hover:opacity-90 transition-all flex items-center gap-2 shadow-sm hover:shadow active:scale-95"
+            onClick={() => goBook()}
+            className="flex h-10 items-center gap-2 rounded-full bg-[#005051] px-5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-[#006a6b] hover:shadow active:scale-95"
             type="button"
           >
-            <span className="material-symbols-outlined text-[20px]">medical_information</span>
-            <span>Ver Meu Prontuário</span>
-          </button>
-          <button
-            onClick={() =>
-              addToast('Prontuário criptografado com chave de segurança ICP-Brasil.', 'info')
-            }
-            aria-label="Opções Rápidas"
-            className="w-10 h-10 rounded-full bg-white dark:bg-[#202929] text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white flex items-center justify-center shadow-sm hover:shadow transition-all border border-[#dde4e3]/60 dark:border-[#263131]"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[20px]">more_vert</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
+              add_task
+            </span>
+            <span>Agendar Consulta</span>
           </button>
         </div>
       </header>
 
-      {/* 2. Hero Card: Próximo Agendamento */}
-      <section className="relative bg-[#eef5f4] dark:bg-[#1a2222] rounded-[28px] p-6 sm:p-8 shadow-md overflow-hidden border border-[#dde4e3]/60 dark:border-[#263131]">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#006a6b] dark:bg-[#004f50] text-white font-medium text-xs tracking-wide">
-              <span className="w-2 h-2 rounded-full bg-[#a0f0f1] animate-ping"></span>
-              Próximo Agendamento
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#002020] dark:text-[#a0f0f1] text-xs font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#005051] dark:bg-[#84d4d4]"></span>
-              Confirmado
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-[#3e4949] dark:text-[#bec9c8] text-xs font-semibold">
-            <span className="material-symbols-outlined text-[18px]">domain</span>
-            <span>Consultório 03 - Unidade Jardins</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          <div className="lg:col-span-7 flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wider text-[#6e7979] font-bold">
-              Data & Horário
-            </span>
-            <div className="text-2xl sm:text-3xl text-[#161d1d] dark:text-white font-bold flex items-center gap-3">
-              <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[32px] sm:text-[36px]">
-                calendar_today
-              </span>
-              <span>Quinta-feira, 24 de Outubro</span>
-            </div>
-            <p className="text-lg text-[#005051] dark:text-[#84d4d4] font-semibold pl-10 sm:pl-11">
-              às 14:30{' '}
-              <span className="text-xs text-[#3e4949] dark:text-[#bec9c8] font-normal">
-                (Duração estimada: 45 min)
-              </span>
-            </p>
-
-            <div className="mt-4 pt-4 flex items-center gap-4 border-t border-[#dde4e3]/60 dark:border-[#263131]">
-              <div className="w-14 h-14 rounded-2xl bg-[#dde4e3] dark:bg-[#202929] flex items-center justify-center text-[#005051] dark:text-[#84d4d4] overflow-hidden shadow-inner flex-shrink-0">
-                <img
-                  src={ASSETS.drMarcelo}
-                  alt="Dr. Marcelo Arantes"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[#161d1d] dark:text-white leading-tight">
-                  Dr. Marcelo Arantes
-                </h2>
-                <p className="text-xs text-[#3e4949] dark:text-[#bec9c8]">
-                  Ortodontia & Estética Facial • CRO/SP 89.412
-                </p>
-                <span className="inline-flex items-center gap-1 text-xs text-[#005051] dark:text-[#84d4d4] font-bold mt-0.5">
-                  <span className="material-symbols-outlined text-[14px] text-amber-500">star</span>
-                  4.9 (148 avaliações)
+      {/* 2. Próximo agendamento */}
+      <section className="relative overflow-hidden rounded-[28px] border border-[#dde4e3]/60 bg-[#eef5f4] p-6 shadow-md sm:p-8 dark:border-[#263131] dark:bg-[#1a2222]">
+        {next && nextBadge ? (
+          <>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#006a6b] px-3 py-1 text-xs font-medium tracking-wide text-white dark:bg-[#004f50]">
+                  <span className="h-2 w-2 animate-ping rounded-full bg-[#a0f0f1]"></span>
+                  Próximo Agendamento
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${nextBadge.className}`}
+                >
+                  {nextBadge.label}
                 </span>
               </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#3e4949] dark:text-[#bec9c8]">
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                  domain
+                </span>
+                <span>{next.room}</span>
+              </div>
             </div>
-          </div>
 
-          <div className="lg:col-span-5 flex flex-col gap-2.5 justify-center bg-white/80 dark:bg-[#202929]/90 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-[#dde4e3]/80 dark:border-[#2d3838]">
-            <span className="text-xs text-[#3e4949] dark:text-[#bec9c8] font-bold mb-1">
-              Ações Rápidas do Agendamento
+            <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12">
+              <div className="flex flex-col gap-1 lg:col-span-7">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#6e7979]">
+                  Data & Horário
+                </span>
+                <div className="flex items-center gap-3 text-2xl font-bold text-[#161d1d] sm:text-3xl dark:text-white">
+                  <span
+                    aria-hidden="true"
+                    className="material-symbols-outlined text-[32px] text-[#005051] sm:text-[36px] dark:text-[#84d4d4]"
+                  >
+                    calendar_today
+                  </span>
+                  <span>{next.date}</span>
+                </div>
+                <p className="pl-10 text-lg font-semibold text-[#005051] sm:pl-11 dark:text-[#84d4d4]">
+                  às {next.time}{' '}
+                  <span className="text-xs font-normal text-[#3e4949] dark:text-[#bec9c8]">
+                    (duração estimada: {next.durationMinutes} min)
+                  </span>
+                </p>
+
+                <div className="mt-4 flex items-center gap-4 border-t border-[#dde4e3]/60 pt-4 dark:border-[#263131]">
+                  <img
+                    src={next.doctorAvatar}
+                    alt=""
+                    className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-inner"
+                  />
+                  <div>
+                    <h2 className="text-base font-bold leading-tight text-[#161d1d] dark:text-white">
+                      {next.doctorName}
+                    </h2>
+                    <p className="text-xs text-[#3e4949] dark:text-[#bec9c8]">
+                      {next.doctorSpecialty} • {next.doctorCro}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#6e7979]">{next.procedure}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-center gap-2.5 rounded-2xl border border-[#dde4e3]/80 bg-white/80 p-5 shadow-sm backdrop-blur-md lg:col-span-5 dark:border-[#2d3838] dark:bg-[#202929]/90">
+                <span className="mb-1 text-xs font-bold text-[#3e4949] dark:text-[#bec9c8]">
+                  Ações do agendamento
+                </span>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setScreen('consultas')}
+                    className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#cce8e7] px-4 text-xs font-semibold text-[#051f20] transition-colors hover:bg-[#b1cccb] dark:bg-[#324b4b] dark:text-[#a0f0f1]"
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                      edit_calendar
+                    </span>
+                    <span>Confirmar, reagendar ou cancelar</span>
+                  </button>
+                  <button
+                    onClick={() => setShowPreConsultationModal(true)}
+                    className="flex h-10 items-center justify-center gap-2 rounded-full bg-[#e8efee] px-4 text-xs font-semibold text-[#005051] transition-colors hover:bg-[#dde4e3] dark:bg-[#263131] dark:text-[#84d4d4]"
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                      info
+                    </span>
+                    <span>Ver orientações pré-consulta</span>
+                  </button>
+                  {next.startsAt && next.endsAt && (
+                    <button
+                      onClick={() =>
+                        downloadIcs({
+                          id: next.id,
+                          startsAt: next.startsAt!,
+                          endsAt: next.endsAt!,
+                          doctorName: next.doctorName,
+                          procedure: next.procedure,
+                          location: next.unit,
+                          notes: next.notes,
+                        })
+                      }
+                      className="flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs font-medium text-[#3e4949] transition-colors hover:bg-[#e8efee] dark:text-[#bec9c8] dark:hover:bg-[#263131]"
+                      type="button"
+                    >
+                      <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                        event
+                      </span>
+                      <span>Adicionar ao calendário (.ics)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined text-[40px] text-[#6e7979]"
+            >
+              event_note
             </span>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => setScreen('agendar')}
-                className="h-10 px-4 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-semibold hover:bg-[#b1cccb] transition-colors flex items-center justify-center gap-2"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[18px]">edit_calendar</span>
-                <span>Reagendar Consulta</span>
-              </button>
-
-              <button
-                onClick={() => setShowPreConsultationModal(true)}
-                className="h-10 px-4 rounded-full bg-[#e8efee] dark:bg-[#263131] text-[#005051] dark:text-[#84d4d4] text-xs font-semibold hover:bg-[#dde4e3] transition-colors flex items-center justify-center gap-2"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[18px]">info</span>
-                <span>Ver Orientações Pré-consulta</span>
-              </button>
-
-              <button
-                onClick={handleAddToCalendar}
-                className="h-10 px-4 rounded-full text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e8efee] dark:hover:bg-[#263131] text-xs font-medium transition-colors flex items-center justify-center gap-2"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[18px]">event</span>
-                <span>Adicionar ao Google Agenda</span>
-              </button>
-            </div>
+            <h2 className="text-lg font-bold text-[#161d1d] dark:text-white">
+              Nenhuma consulta marcada
+            </h2>
+            <p className="max-w-md text-xs text-[#3e4949] dark:text-[#bec9c8]">
+              Escolha o profissional e um horário livre — leva menos de um minuto.
+            </p>
+            <button
+              onClick={() => goBook()}
+              className="mt-1 h-11 rounded-full bg-[#005051] px-6 text-xs font-bold text-white shadow-sm hover:bg-[#006a6b]"
+              type="button"
+            >
+              Agendar minha consulta
+            </button>
           </div>
-        </div>
+        )}
       </section>
 
-      {/* 3. Grid de Ações Rápidas M3 */}
+      {/* 3. Ações rápidas */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[#161d1d] dark:text-white tracking-tight">
+          <h2 className="text-lg font-bold tracking-tight text-[#161d1d] dark:text-white">
             Ações Rápidas
           </h2>
           <span className="text-xs text-[#6e7979]">Acesso frequente</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Agendar Consulta (FAB Proeminente) */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <button
-            onClick={() => setScreen('agendar')}
-            className="group relative flex flex-col justify-between p-6 rounded-[24px] bg-[#005051] text-white shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all overflow-hidden min-h-[170px] text-left"
+            onClick={() => goBook()}
+            className="group relative flex min-h-[170px] flex-col justify-between overflow-hidden rounded-[24px] bg-[#005051] p-6 text-left text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-xl"
           >
-            <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none group-hover:scale-125 transition-transform duration-300"></div>
-            <div className="flex items-center justify-between z-10 w-full">
-              <div className="w-12 h-12 rounded-full bg-[#a0f0f1] text-[#002020] flex items-center justify-center shadow-sm">
-                <span className="material-symbols-outlined text-[24px]">add_task</span>
+            <div className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 rounded-full bg-white/10 transition-transform duration-300 group-hover:scale-125"></div>
+            <div className="z-10 flex w-full items-center justify-between">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#a0f0f1] text-[#002020] shadow-sm">
+                <span aria-hidden="true" className="material-symbols-outlined text-[24px]">
+                  add_task
+                </span>
               </div>
-              <span className="text-[11px] bg-white/20 text-white px-2.5 py-0.5 rounded-full font-bold">
+              <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white">
                 Prioritário
               </span>
             </div>
             <div className="z-10 mt-4">
               <h3 className="text-base font-bold text-white">Agendar Consulta</h3>
-              <p className="text-xs text-[#97e7e7] mt-1">Marque horário com especialistas</p>
+              <p className="mt-1 text-xs text-[#97e7e7]">Marque horário com especialistas</p>
             </div>
           </button>
 
-          {/* Minhas Consultas */}
-          <button
+          <QuickCard
+            icon="calendar_month"
+            title="Minhas Consultas"
+            subtitle="Próximos passos e histórico"
+            chip={
+              upcomingCount > 0
+                ? `${upcomingCount} ${upcomingCount === 1 ? 'ativa' : 'ativas'}`
+                : 'Nenhuma ativa'
+            }
             onClick={() => setScreen('consultas')}
-            className="group relative flex flex-col justify-between p-6 rounded-[24px] bg-white dark:bg-[#1a2222] text-[#161d1d] dark:text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all min-h-[170px] text-left border border-[#dde4e3]/60 dark:border-[#263131]"
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-12 h-12 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1] flex items-center justify-center">
-                <span className="material-symbols-outlined text-[24px]">calendar_month</span>
-              </div>
-              <span className="inline-flex items-center justify-center h-6 px-2.5 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#002020] dark:text-[#a0f0f1] text-[11px] font-bold">
-                2 ativas
-              </span>
-            </div>
-            <div className="mt-4">
-              <h3 className="text-base font-bold text-[#161d1d] dark:text-white group-hover:text-[#005051] dark:group-hover:text-[#84d4d4] transition-colors">
-                Minhas Consultas
-              </h3>
-              <p className="text-xs text-[#6e7979] mt-1">Próximos passos e histórico</p>
-            </div>
-          </button>
+          />
 
-          {/* Prontuário & Exames */}
-          <button
+          <QuickCard
+            icon="clinical_notes"
+            title="Prontuário & Exames"
+            subtitle="Odontograma, raios-x e laudos"
+            chip={dataSource === 'supabase' ? 'Exemplo' : undefined}
             onClick={() => setScreen('prontuario')}
-            className="group relative flex flex-col justify-between p-6 rounded-[24px] bg-white dark:bg-[#1a2222] text-[#161d1d] dark:text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all min-h-[170px] text-left border border-[#dde4e3]/60 dark:border-[#263131]"
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-12 h-12 rounded-full bg-[#d2e4ff] dark:bg-[#1e293b] text-[#005051] dark:text-[#84d4d4] flex items-center justify-center">
-                <span className="material-symbols-outlined text-[24px]">clinical_notes</span>
-              </div>
-              <span className="material-symbols-outlined text-[#6e7979] text-[20px] group-hover:translate-x-1 transition-transform">
-                arrow_forward
-              </span>
-            </div>
-            <div className="mt-4">
-              <h3 className="text-base font-bold text-[#161d1d] dark:text-white group-hover:text-[#005051] dark:group-hover:text-[#84d4d4] transition-colors">
-                Prontuário & Exames
-              </h3>
-              <p className="text-xs text-[#6e7979] mt-1">Odontograma, raios-x e laudos</p>
-            </div>
-          </button>
+            iconBg="bg-[#d2e4ff] dark:bg-[#1e293b]"
+          />
 
-          {/* Meu Convênio */}
-          <button
+          <QuickCard
+            icon="verified_user"
+            title="Meu Convênio"
+            subtitle="Validação e rede de cobertura"
+            chip={plan ? plan.insuranceName : 'Particular'}
             onClick={() => setScreen('convenio')}
-            className="group relative flex flex-col justify-between p-6 rounded-[24px] bg-white dark:bg-[#1a2222] text-[#161d1d] dark:text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all min-h-[170px] text-left border border-[#dde4e3]/60 dark:border-[#263131]"
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-12 h-12 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1] flex items-center justify-center">
-                <span className="material-symbols-outlined text-[24px]">verified_user</span>
-              </div>
-              <span className="inline-flex items-center gap-1 text-[11px] text-[#005051] dark:text-[#84d4d4] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#005051] dark:bg-[#84d4d4]"></span>
-                Ativo
-              </span>
-            </div>
-            <div className="mt-4">
-              <h3 className="text-base font-bold text-[#161d1d] dark:text-white group-hover:text-[#005051] dark:group-hover:text-[#84d4d4] transition-colors">
-                Meu Convênio
-              </h3>
-              <p className="text-xs text-[#6e7979] mt-1">Validação e rede de cobertura</p>
-            </div>
-          </button>
+          />
         </div>
       </section>
 
-      {/* 4. Seção Especialidades Odontológicas */}
-      <section className="flex flex-col gap-6 bg-[#eef5f4] dark:bg-[#1a2222] rounded-[28px] p-6 sm:p-8 shadow-sm border border-[#dde4e3]/60 dark:border-[#263131]">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 4. Especialidades */}
+      <section className="flex flex-col gap-6 rounded-[28px] border border-[#dde4e3]/60 bg-[#eef5f4] p-6 shadow-sm sm:p-8 dark:border-[#263131] dark:bg-[#1a2222]">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h2 className="text-xl font-bold text-[#161d1d] dark:text-white tracking-tight">
+            <h2 className="text-xl font-bold tracking-tight text-[#161d1d] dark:text-white">
               Especialidades Odontológicas
             </h2>
-            <p className="text-xs sm:text-sm text-[#3e4949] dark:text-[#bec9c8] mt-0.5">
-              Conheça os tratamentos disponíveis na nossa rede credenciada
+            <p className="mt-0.5 text-xs text-[#3e4949] sm:text-sm dark:text-[#bec9c8]">
+              Escolha uma especialidade e veja os profissionais com horário livre
             </p>
           </div>
 
-          {/* Barra de Busca M3 Pill */}
-          <div className="flex items-center gap-2 bg-white dark:bg-[#202929] px-4 py-2 rounded-full shadow-sm w-full md:w-80 border border-[#dde4e3] dark:border-[#2d3838]">
-            <span className="material-symbols-outlined text-[#6e7979] text-[20px]">search</span>
+          <div className="flex w-full items-center gap-2 rounded-full border border-[#dde4e3] bg-white px-4 py-2 shadow-sm md:w-80 dark:border-[#2d3838] dark:bg-[#202929]">
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined text-[20px] text-[#6e7979]"
+            >
+              search
+            </span>
             <input
-              className="bg-transparent border-0 outline-none w-full text-xs text-[#161d1d] dark:text-white placeholder:text-[#6e7979]"
+              className="w-full border-0 bg-transparent text-xs text-[#161d1d] outline-none placeholder:text-[#6e7979] dark:text-white"
               placeholder="Buscar clareamento, implante, profilaxia..."
               type="search"
               value={specialtySearch}
@@ -336,24 +385,17 @@ export const PatientDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Chips de Filtro Rápido */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {[
-            'Todos os Cuidados',
-            'Estética Dental',
-            'Cirurgias & Implantes',
-            'Aparelhos & Alinhadores',
-            'Saúde Infantil',
-          ].map((chip) => {
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {FILTER_CHIPS.map((chip) => {
             const isSelected = activeSpecialtyFilter === chip;
             return (
               <button
                 key={chip}
                 onClick={() => setActiveSpecialtyFilter(chip)}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all ${
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
                   isSelected
                     ? 'bg-[#005051] text-white shadow-sm'
-                    : 'bg-[#dde4e3] dark:bg-[#263131] text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#cce8e7]'
+                    : 'bg-[#dde4e3] text-[#3e4949] hover:bg-[#cce8e7] dark:bg-[#263131] dark:text-[#bec9c8]'
                 }`}
                 type="button"
               >
@@ -363,162 +405,139 @@ export const PatientDashboard: React.FC = () => {
           })}
         </div>
 
-        {/* Grid de Cards de Especialidades */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           {filteredSpecialties.map((item) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => {
-                setScreen('agendar');
-                addToast(`Especialidade ${item.title} selecionada para agendamento!`, 'info');
-              }}
-              className="flex flex-col items-center text-center p-4 rounded-2xl bg-white dark:bg-[#202929] hover:bg-[#cce8e7]/30 dark:hover:bg-[#2d3838] transition-all shadow-sm group cursor-pointer border border-[#dde4e3]/60 dark:border-[#263131]"
+              onClick={() => goBook(item.title)}
+              className="group flex cursor-pointer flex-col items-center rounded-2xl border border-[#dde4e3]/60 bg-white p-4 text-center shadow-sm transition-all hover:bg-[#cce8e7]/30 dark:border-[#263131] dark:bg-[#202929] dark:hover:bg-[#2d3838]"
             >
-              <div className="w-14 h-14 rounded-2xl bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1] flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-[28px]">{item.icon}</span>
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#cce8e7] text-[#005051] transition-transform group-hover:scale-110 dark:bg-[#324b4b] dark:text-[#a0f0f1]">
+                <span aria-hidden="true" className="material-symbols-outlined text-[28px]">
+                  {item.icon}
+                </span>
               </div>
-              <span className="text-sm font-bold text-[#161d1d] dark:text-white leading-tight">
+              <span className="text-sm font-bold leading-tight text-[#161d1d] dark:text-white">
                 {item.title}
               </span>
-              <span className="text-[11px] text-[#6e7979] mt-1">{item.desc}</span>
+              <span className="mt-1 text-[11px] text-[#6e7979]">{item.desc}</span>
             </button>
           ))}
+          {filteredSpecialties.length === 0 && (
+            <p className="col-span-full text-xs text-[#6e7979]">
+              Nenhuma especialidade encontrada.
+            </p>
+          )}
         </div>
       </section>
 
-      {/* 5. Linha do Tempo & Histórico Recente */}
+      {/* 5. Últimas consultas */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-[#161d1d] dark:text-white tracking-tight">
-              Histórico e Linha do Tempo
+            <h2 className="text-lg font-bold tracking-tight text-[#161d1d] dark:text-white">
+              Últimas Consultas
             </h2>
             <span className="text-xs text-[#6e7979]">Recentes</span>
           </div>
           <button
             onClick={() => setScreen('consultas')}
-            className="text-xs text-[#005051] dark:text-[#84d4d4] hover:underline flex items-center gap-1 font-bold"
+            className="flex items-center gap-1 text-xs font-bold text-[#005051] hover:underline dark:text-[#84d4d4]"
           >
-            <span>Ver todo o histórico</span>
-            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+            <span>Ver todas</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">
+              chevron_right
+            </span>
           </button>
         </div>
 
         <div className="flex flex-col gap-3">
-          {/* Item 1: Agendado */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#1a2222] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors shadow-sm border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] flex items-center justify-center text-[#005051] dark:text-[#a0f0f1] shrink-0">
-                <span className="material-symbols-outlined text-[20px]">calendar_clock</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#161d1d] dark:text-white">
-                    Manutenção de Alinhador Ortodôntico
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FFDDB9] text-[#2D1600] text-[11px] font-bold">
-                    Agendado
-                  </span>
-                </div>
-                <p className="text-xs text-[#6e7979] mt-0.5">
-                  Dr. Marcelo Arantes • 24 Out 2024 às 14:30 • Unidade Jardins
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() => setScreen('consultas')}
-                className="h-9 px-3 rounded-full bg-[#eef5f4] dark:bg-[#263131] text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] text-xs font-semibold transition-colors"
-                type="button"
+          {recent.length === 0 && (
+            <p className="rounded-2xl border border-[#dde4e3]/60 bg-white p-5 text-xs text-[#6e7979] dark:border-[#263131] dark:bg-[#1a2222]">
+              Suas consultas vão aparecer aqui depois do primeiro agendamento.
+            </p>
+          )}
+          {recent.map((apt) => {
+            const badge = statusBadge(apt.dbStatus ?? 'SCHEDULED');
+            return (
+              <div
+                key={apt.id}
+                className="flex items-center justify-between rounded-2xl border border-[#dde4e3]/60 bg-white p-4 shadow-sm transition-colors hover:bg-[#eef5f4] dark:border-[#263131] dark:bg-[#1a2222] dark:hover:bg-[#202929]"
               >
-                Detalhes
-              </button>
-              <span className="material-symbols-outlined text-[#bec9c8] text-[20px]">
-                more_horiz
-              </span>
-            </div>
-          </div>
-
-          {/* Item 2: Finalizado Profilaxia */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#1a2222] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors shadow-sm border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] flex items-center justify-center text-[#005051] dark:text-[#a0f0f1] shrink-0">
-                <span className="material-symbols-outlined text-[20px]">check_circle</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#161d1d] dark:text-white">
-                    Profilaxia & Remoção de Placa Bacteriana
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#B2F1B8] text-[#002107] text-[11px] font-bold">
-                    Finalizado
-                  </span>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#cce8e7] text-[#005051] dark:bg-[#324b4b] dark:text-[#a0f0f1]">
+                    <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
+                      {apt.dbStatus === 'COMPLETED'
+                        ? 'check_circle'
+                        : apt.dbStatus === 'CANCELLED'
+                          ? 'event_busy'
+                          : 'calendar_clock'}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-[#161d1d] dark:text-white">
+                        {apt.procedure}
+                      </span>
+                      <span
+                        className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${badge.className}`}
+                      >
+                        {badge.label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-[#6e7979]">
+                      {apt.doctorName} • {apt.date} às {apt.time} • {apt.unit}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-[#6e7979] mt-0.5">
-                  Dra. Helena Gusmão • 12 Set 2024 às 10:00 • Laudo e fotos anexados
-                </p>
+                <button
+                  onClick={() => setScreen('consultas')}
+                  className="hidden h-9 rounded-full bg-[#eef5f4] px-3 text-xs font-semibold text-[#3e4949] transition-colors hover:text-[#161d1d] sm:block dark:bg-[#263131] dark:text-[#bec9c8]"
+                  type="button"
+                >
+                  Detalhes
+                </button>
               </div>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() =>
-                  addToast(
-                    'Laudo Clínico: Profilaxia realizada sem sangramento gengival ativo. Índice de placa reduzido.',
-                    'info',
-                  )
-                }
-                className="h-9 px-3 rounded-full bg-[#eef5f4] dark:bg-[#263131] text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] text-xs font-semibold transition-colors flex items-center gap-1.5"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[16px]">receipt_long</span>
-                <span>Ver Laudo</span>
-              </button>
-              <span className="material-symbols-outlined text-[#bec9c8] text-[20px]">
-                more_horiz
-              </span>
-            </div>
-          </div>
-
-          {/* Item 3: Finalizado Raio-X */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-[#1a2222] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors shadow-sm border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] flex items-center justify-center text-[#005051] dark:text-[#a0f0f1] shrink-0">
-                <span className="material-symbols-outlined text-[20px]">photo_camera</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#161d1d] dark:text-white">
-                    Radiografia Panorâmica Digital
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#B2F1B8] text-[#002107] text-[11px] font-bold">
-                    Finalizado
-                  </span>
-                </div>
-                <p className="text-xs text-[#6e7979] mt-0.5">
-                  Centro Radiológico Aura • 15 Ago 2024 às 16:15 • 2 imagens disponíveis
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() => setShowRayXModal(true)}
-                className="h-9 px-3 rounded-full bg-[#eef5f4] dark:bg-[#263131] text-[#005051] dark:text-[#84d4d4] hover:bg-[#cce8e7] text-xs font-semibold transition-colors flex items-center gap-1.5"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[16px]">visibility</span>
-                <span>Ver Raio-X</span>
-              </button>
-              <span className="material-symbols-outlined text-[#bec9c8] text-[20px]">
-                more_horiz
-              </span>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </section>
     </div>
   );
 };
+
+const QuickCard: React.FC<{
+  icon: string;
+  title: string;
+  subtitle: string;
+  chip?: string;
+  iconBg?: string;
+  onClick: () => void;
+}> = ({ icon, title, subtitle, chip, iconBg = 'bg-[#cce8e7] dark:bg-[#324b4b]', onClick }) => (
+  <button
+    onClick={onClick}
+    className="group relative flex min-h-[170px] flex-col justify-between rounded-[24px] border border-[#dde4e3]/60 bg-white p-6 text-left text-[#161d1d] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-[#263131] dark:bg-[#1a2222] dark:text-white"
+  >
+    <div className="flex w-full items-center justify-between gap-2">
+      <div
+        className={`flex h-12 w-12 items-center justify-center rounded-full text-[#005051] dark:text-[#a0f0f1] ${iconBg}`}
+      >
+        <span aria-hidden="true" className="material-symbols-outlined text-[24px]">
+          {icon}
+        </span>
+      </div>
+      {chip && (
+        <span className="inline-flex h-6 max-w-[60%] items-center justify-center truncate rounded-full bg-[#cce8e7] px-2.5 text-[11px] font-bold text-[#002020] dark:bg-[#324b4b] dark:text-[#a0f0f1]">
+          {chip}
+        </span>
+      )}
+    </div>
+    <div className="mt-4">
+      <h3 className="text-base font-bold text-[#161d1d] transition-colors group-hover:text-[#005051] dark:text-white dark:group-hover:text-[#84d4d4]">
+        {title}
+      </h3>
+      <p className="mt-1 text-xs text-[#6e7979]">{subtitle}</p>
+    </div>
+  </button>
+);

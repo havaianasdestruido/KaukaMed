@@ -1,3 +1,5 @@
+import { type AppointmentStatus, type AppointmentType } from '@kaukamed/shared';
+
 export type UserRole = 'paciente' | 'funcionario' | 'dentista' | 'administrador';
 
 export type ScreenId =
@@ -10,6 +12,7 @@ export type ScreenId =
   | 'convenio'
   | 'configuracoes'
   | 'admin-visao-geral'
+  | 'admin-agenda'
   | 'admin-dentistas'
   | 'admin-pacientes'
   | 'admin-faturamento'
@@ -27,6 +30,8 @@ export interface UserProfile {
   cro?: string;
   planName?: string;
   planNumber?: string;
+  phone?: string;
+  cpf?: string;
 }
 
 export interface Appointment {
@@ -48,6 +53,24 @@ export interface Appointment {
   durationMinutes: number;
   modality?: 'presencial' | 'teleorientacao';
   rating?: number;
+
+  // Campos abaixo só existem quando a consulta vem do banco (modo Supabase).
+  /** Início em ISO 8601 (UTC). */
+  startsAt?: string;
+  /** Fim em ISO 8601 (UTC). */
+  endsAt?: string;
+  /** Status exato do banco (`status` acima é a versão simplificada das telas do protótipo). */
+  dbStatus?: AppointmentStatus;
+  type?: AppointmentType;
+  doctorId?: string;
+  patientId?: string;
+  patientName?: string;
+  patientCpf?: string;
+  patientPhone?: string;
+  insuranceId?: string;
+  /** Valor da consulta definido pelo banco (preço do dentista). */
+  price?: number;
+  cancelReason?: string;
 }
 
 export interface Doctor {
@@ -64,9 +87,50 @@ export interface Doctor {
   npsScore: number;
   npsPercentage: number;
   status:
-    'Em Atendimento' | 'Em Cirurgia' | 'Escala Regular' | 'Ativo' | 'Plantão Ativo' | 'Em Férias';
+    | 'Em Atendimento'
+    | 'Em Cirurgia'
+    | 'Escala Regular'
+    | 'Ativo'
+    | 'Plantão Ativo'
+    | 'Em Férias'
+    | 'Inativo';
   avatar: string;
   isCertified: boolean;
+
+  // Campos abaixo só existem quando o profissional vem do banco (modo Supabase).
+  locationId?: string;
+  locationAddress?: string;
+  /** Dias de atendimento: 0 = domingo … 6 = sábado. */
+  weekdays?: number[];
+  /** Valor da consulta particular. */
+  consultationPrice?: number;
+  bio?: string;
+  isActive?: boolean;
+}
+
+/** Paciente como listado pela recepção/dentista (`list_patients`). */
+export interface PatientSummary {
+  id: string;
+  name: string;
+  cpf?: string;
+  phone?: string;
+  email?: string;
+  isActive: boolean;
+  insuranceName?: string;
+  insuranceCard?: string;
+  appointmentsCount: number;
+  lastVisit?: string;
+  nextVisit?: string;
+}
+
+/** Convênio do paciente (`list_patient_insurances`). */
+export interface PatientInsurance {
+  id: string;
+  insuranceId: string;
+  insuranceName: string;
+  cardNumber: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED';
+  validUntil?: string;
 }
 
 export interface TissGuide {

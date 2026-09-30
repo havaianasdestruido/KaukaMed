@@ -1,16 +1,33 @@
-import { type AppointmentStatus, type UserRole as DbUserRole } from '@kaukamed/shared';
+import {
+  APPOINTMENT_TYPE_LABELS,
+  type AppointmentStatus,
+  type AppointmentType,
+  type UserRole as DbUserRole,
+} from '@kaukamed/shared';
 
-import { ASSETS } from '../data/mockData';
-import { type Appointment, type Doctor, type UserProfile, type UserRole } from '../types';
+import { initialsAvatar } from '../lib/avatar';
+import { formatLongDate, formatTime } from '../lib/clinicTime';
+import { describeWeekdays } from '../lib/format';
+import {
+  type Appointment,
+  type Doctor,
+  type PatientInsurance,
+  type PatientSummary,
+  type UserProfile,
+  type UserRole,
+} from '../types';
 
 /**
- * Conversões entre o formato do banco (db/kaukamed_schema.sql, enums em
- * inglês e maiúsculas) e o formato usado pelas telas do protótipo
- * (src/types, em pt-BR).
+ * Conversões entre o formato do banco (db/kaukamed_schema.sql + funções da
+ * migration 002: colunas em snake_case, enums em inglês e maiúsculas) e o
+ * formato usado pelas telas (src/types, em pt-BR).
+ *
+ * Só há linhas PLANAS aqui: as funções do banco já devolvem tudo junto, então o
+ * front-end não usa "embeds" do PostgREST (que dependem de relacionamentos).
  */
 
 // ---------------------------------------------------------------------------
-// Papéis
+// Papéis e status
 // ---------------------------------------------------------------------------
 
 const ROLE_DB_TO_UI: Record<DbUserRole, UserRole> = {
@@ -24,10 +41,18 @@ export function roleFromDb(role: DbUserRole | null | undefined): UserRole {
   return (role && ROLE_DB_TO_UI[role]) || 'paciente';
 }
 
-// ---------------------------------------------------------------------------
-// Status de agendamento
-// ---------------------------------------------------------------------------
+const ROLE_UI_TO_DB: Record<UserRole, DbUserRole> = {
+  paciente: 'PATIENT',
+  funcionario: 'EMPLOYEE',
+  dentista: 'DOCTOR',
+  administrador: 'ADMIN',
+};
 
+export function roleToDb(role: UserRole): DbUserRole {
+  return ROLE_UI_TO_DB[role];
+}
+
+/** Status simplificado usado pelos cartões das telas do protótipo. */
 const STATUS_DB_TO_UI: Record<AppointmentStatus, Appointment['status']> = {
   SCHEDULED: 'agendado',
   CONFIRMED: 'confirmado',
@@ -42,64 +67,10 @@ export function statusFromDb(status: AppointmentStatus): Appointment['status'] {
 }
 
 // ---------------------------------------------------------------------------
-// Datas (as telas usam "Quinta-feira, 24 de Outubro de 2024" + "14:30")
+// Linhas do banco
 // ---------------------------------------------------------------------------
 
-const MONTHS_PT = [
-  'janeiro',
-  'fevereiro',
-  'março',
-  'abril',
-  'maio',
-  'junho',
-  'julho',
-  'agosto',
-  'setembro',
-  'outubro',
-  'novembro',
-  'dezembro',
-];
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** ISO → "Quinta-feira, 24 de Outubro de 2024" (horário local). */
-export function formatLongDate(iso: string): string {
-  const d = new Date(iso);
-  const weekday = capitalize(d.toLocaleDateString('pt-BR', { weekday: 'long' }));
-  const month = capitalize(MONTHS_PT[d.getMonth()] ?? '');
-  return `${weekday}, ${d.getDate()} de ${month} de ${d.getFullYear()}`;
-}
-
-/** ISO → "14:30" (horário local). */
-export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/**
- * "Quinta-feira, 24 de Outubro de 2024" + "14:30" → Date local.
- * Também aceita datas ISO (`2024-10-24`). Retorna `null` se não reconhecer.
- */
-export function parseLongDate(dateText: string, time: string): Date | null {
-  const [hh, mm] = time.split(':').map((n) => Number(n));
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
-
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateText);
-  if (iso) {
-    return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), hh, mm);
-  }
-
-  const match = /(\d{1,2})\s+de\s+([a-zà-ú]+)\s+de\s+(\d{4})/i.exec(dateText);
-  if (!match) return null;
-  const month = MONTHS_PT.indexOf(match[2]!.toLowerCase());
-  if (month < 0) return null;
-  return new Date(Number(match[3]), month, Number(match[1]), hh, mm);
-}
-
-// ---------------------------------------------------------------------------
-// Linhas do banco (apenas as colunas selecionadas pelos services)
-// ---------------------------------------------------------------------------
-
+/** `public.profiles` (colunas lidas no login). */
 export interface ProfileRow {
   id: string;
   role: DbUserRole;
@@ -109,105 +80,206 @@ export interface ProfileRow {
   cpf: string | null;
 }
 
-export interface PatientInsuranceRow {
-  card_number: string;
-  status: string;
-  insurance: { name: string } | null;
-}
-
-export interface DoctorRow {
+/** Retorno de `public.list_doctors()`. */
+export interface DoctorRpcRow {
   id: string;
+  full_name: string;
   crm: string;
   bio: string | null;
   consultation_price: number | string | null;
-  profile?: { full_name: string; is_active: boolean } | null;
-  specialty: { name: string } | null;
-  location: { name: string } | null;
+  specialty_id: string;
+  specialty_name: string;
+  specialty_ids: string[] | null;
+  specialties: string[] | null;
+  location_id: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  is_active: boolean;
+  weekdays: number[] | null;
 }
 
-export interface AppointmentRow {
+/** Retorno de `public.list_appointments(...)`. */
+export interface AppointmentRpcRow {
   id: string;
   status: AppointmentStatus;
-  type: string;
+  type: AppointmentType;
   scheduled_start: string;
   scheduled_end: string;
   price: number | string | null;
   notes: string | null;
-  doctor: {
-    id: string;
-    crm: string;
-    profile?: { full_name: string } | null;
-    specialty: { name: string } | null;
-  } | null;
-  location: { name: string; address: string | null } | null;
-  insurance: { card_number: string; insurance: { name: string } | null } | null;
+  cancel_reason: string | null;
+  confirmed_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  patient_id: string;
+  patient_name: string;
+  patient_cpf: string | null;
+  patient_phone: string | null;
+  doctor_id: string;
+  doctor_name: string;
+  doctor_crm: string;
+  specialty_name: string;
+  location_id: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  insurance_id: string | null;
+  insurance_name: string | null;
+  insurance_card: string | null;
+}
+
+/** Retorno de `public.list_patients(...)`. */
+export interface PatientRpcRow {
+  id: string;
+  full_name: string;
+  cpf: string | null;
+  phone: string | null;
+  email: string | null;
+  is_active: boolean;
+  created_at: string;
+  insurance_name: string | null;
+  insurance_card: string | null;
+  appointments_count: number;
+  last_visit: string | null;
+  next_visit: string | null;
+}
+
+/** Retorno de `public.list_patient_insurances(...)`. */
+export interface PatientInsuranceRpcRow {
+  id: string;
+  patient_id: string;
+  insurance_id: string;
+  insurance_name: string;
+  card_number: string;
+  status: PatientInsurance['status'];
+  valid_until: string | null;
 }
 
 // ---------------------------------------------------------------------------
-// Row → modelo das telas
+// Linha → modelo das telas
 // ---------------------------------------------------------------------------
+
+const toNumber = (value: number | string | null | undefined): number | undefined =>
+  value === null || value === undefined || value === '' ? undefined : Number(value);
 
 export function profileFromRow(
   row: ProfileRow,
-  extras: { insurance?: PatientInsuranceRow | null; doctor?: DoctorRow | null } = {},
+  extras: { insurance?: PatientInsuranceRpcRow | null; doctor?: DoctorRpcRow | null } = {},
 ): UserProfile {
-  const role = roleFromDb(row.role);
   return {
     id: row.id,
     name: row.full_name,
     email: row.email ?? '',
-    role,
-    avatar: role === 'paciente' ? ASSETS.drMariana : ASSETS.camilaFerraz,
-    specialty: extras.doctor?.specialty?.name,
+    role: roleFromDb(row.role),
+    avatar: initialsAvatar(row.full_name),
+    specialty: extras.doctor?.specialty_name,
     cro: extras.doctor?.crm,
-    planName: extras.insurance?.insurance?.name,
+    planName: extras.insurance?.insurance_name,
     planNumber: extras.insurance?.card_number,
+    phone: row.phone ?? undefined,
+    cpf: row.cpf ?? undefined,
   };
 }
 
-export function appointmentFromRow(row: AppointmentRow): Appointment {
-  const start = new Date(row.scheduled_start).getTime();
-  const end = new Date(row.scheduled_end).getTime();
-  const price = row.price === null ? 0 : Number(row.price);
-  const insuranceName = row.insurance?.insurance?.name;
+export function appointmentFromRpc(row: AppointmentRpcRow): Appointment {
+  const durationMinutes = Math.max(
+    5,
+    Math.round(
+      (new Date(row.scheduled_end).getTime() - new Date(row.scheduled_start).getTime()) / 60000,
+    ),
+  );
+  const price = toNumber(row.price) ?? 0;
+  const hasInsurance = Boolean(row.insurance_name);
+  const typeLabel = APPOINTMENT_TYPE_LABELS[row.type] ?? 'Consulta odontológica';
 
   return {
     id: row.id,
     date: formatLongDate(row.scheduled_start),
     time: formatTime(row.scheduled_start),
-    doctorName: row.doctor?.profile?.full_name ?? 'Profissional',
-    doctorSpecialty: row.doctor?.specialty?.name ?? '',
-    doctorCro: row.doctor?.crm ?? '',
-    doctorAvatar: ASSETS.drMarcelo,
-    room: row.location?.name ?? 'A definir',
-    unit: row.location?.name ?? 'OdontoAura',
-    procedure: row.notes?.split('\n')[0] || 'Consulta odontológica',
+    doctorName: row.doctor_name,
+    doctorSpecialty: row.specialty_name,
+    doctorCro: row.doctor_crm,
+    doctorAvatar: initialsAvatar(row.doctor_name),
+    room: row.location_name ?? 'A definir',
+    unit: row.location_name ?? 'OdontoAura',
+    procedure: typeLabel,
     status: statusFromDb(row.status),
-    insuranceName: insuranceName ?? 'Particular',
-    insuranceCoverage: insuranceName ? 'Coberto pelo convênio' : 'Particular',
-    copayAmount: insuranceName ? 0 : price,
+    insuranceName: row.insurance_name ?? 'Particular',
+    insuranceCoverage: hasInsurance ? 'cobertura a confirmar na clínica' : 'pagamento na clínica',
+    copayAmount: hasInsurance ? 0 : price,
     notes: row.notes ?? undefined,
-    durationMinutes: Math.max(15, Math.round((end - start) / 60000)),
+    durationMinutes,
     modality: row.type === 'TELEMEDICINE' ? 'teleorientacao' : 'presencial',
+
+    startsAt: row.scheduled_start,
+    endsAt: row.scheduled_end,
+    dbStatus: row.status,
+    type: row.type,
+    doctorId: row.doctor_id,
+    patientId: row.patient_id,
+    patientName: row.patient_name,
+    patientCpf: row.patient_cpf ?? undefined,
+    patientPhone: row.patient_phone ?? undefined,
+    insuranceId: row.insurance_id ?? undefined,
+    price,
+    cancelReason: row.cancel_reason ?? undefined,
   };
 }
 
-export function doctorFromRow(row: DoctorRow): Doctor {
+export function doctorFromRpc(row: DoctorRpcRow): Doctor {
+  const weekdays = row.weekdays ?? [];
+  const specialties =
+    row.specialties && row.specialties.length > 0 ? row.specialties : [row.specialty_name];
+
   return {
     id: row.id,
-    name: row.profile?.full_name ?? 'Profissional',
+    name: row.full_name,
     cro: row.crm,
-    specialties: row.specialty ? [row.specialty.name] : [],
+    specialties,
     contractType: 'Corpo clínico',
-    schedule: 'Conforme agenda',
-    room: row.location?.name ?? 'A definir',
+    schedule: describeWeekdays(weekdays),
+    room: row.location_name ?? 'A definir',
     appointmentsCount: 0,
     commissionPercentage: 0,
     monthlyRevenue: 0,
     npsScore: 0,
     npsPercentage: 0,
-    status: row.profile?.is_active === false ? 'Em Férias' : 'Ativo',
-    avatar: ASSETS.drMarcelo,
+    status: row.is_active ? 'Ativo' : 'Inativo',
+    avatar: initialsAvatar(row.full_name),
     isCertified: true,
+
+    locationId: row.location_id ?? undefined,
+    locationAddress: row.location_address ?? undefined,
+    weekdays,
+    consultationPrice: toNumber(row.consultation_price),
+    bio: row.bio ?? undefined,
+    isActive: row.is_active,
+  };
+}
+
+export function patientFromRpc(row: PatientRpcRow): PatientSummary {
+  return {
+    id: row.id,
+    name: row.full_name,
+    cpf: row.cpf ?? undefined,
+    phone: row.phone ?? undefined,
+    email: row.email ?? undefined,
+    isActive: row.is_active,
+    insuranceName: row.insurance_name ?? undefined,
+    insuranceCard: row.insurance_card ?? undefined,
+    appointmentsCount: row.appointments_count,
+    lastVisit: row.last_visit ?? undefined,
+    nextVisit: row.next_visit ?? undefined,
+  };
+}
+
+export function insuranceFromRpc(row: PatientInsuranceRpcRow): PatientInsurance {
+  return {
+    id: row.id,
+    insuranceId: row.insurance_id,
+    insuranceName: row.insurance_name,
+    cardNumber: row.card_number,
+    status: row.status,
+    validUntil: row.valid_until ?? undefined,
   };
 }

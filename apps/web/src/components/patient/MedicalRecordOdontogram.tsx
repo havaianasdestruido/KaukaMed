@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
 import { type ToothRecord } from '../../types';
+import { DemoNotice } from '../common/DemoNotice';
 
 export const MedicalRecordOdontogram: React.FC = () => {
   const { odontogram, selectedTooth, setSelectedTooth, setShowRayXModal, addToast } = useApp();
@@ -32,6 +33,7 @@ export const MedicalRecordOdontogram: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 pb-16 max-w-7xl mx-auto w-full">
+      <DemoNotice feature="Prontuário e odontograma" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

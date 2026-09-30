@@ -2,17 +2,19 @@ import { type UserProfile } from '../types';
 import { requireSupabase } from '../lib/supabase';
 import {
   profileFromRow,
-  type DoctorRow,
-  type PatientInsuranceRow,
+  type DoctorRpcRow,
+  type PatientInsuranceRpcRow,
   type ProfileRow,
 } from './mappers';
+import { callRpc } from './rpc';
 
 /**
  * Autenticação via Supabase Auth + leitura do perfil em `public.profiles`.
  *
  * O perfil é criado automaticamente pelo trigger `handle_new_user`
- * (db/migrations/001_frontend_support.sql) a partir dos metadados enviados no
- * cadastro — o front-end nunca insere diretamente em `profiles`.
+ * (db/migrations/001 e 002) a partir dos metadados enviados no cadastro — o
+ * front-end nunca insere diretamente em `profiles`, e o papel (`role`) de quem se
+ * cadastra é sempre PATIENT (o banco ignora qualquer `role` enviada).
  */
 
 export interface SignUpInput {
@@ -23,7 +25,15 @@ export interface SignUpInput {
   phone?: string;
 }
 
-/** Carrega o perfil completo (com convênio ou dados de médico, se houver). */
+/** Endereço do app (com a base do Vite), para onde os e-mails do Supabase devem voltar. */
+function appUrl(): string {
+  return window.location.origin + import.meta.env.BASE_URL;
+}
+
+/**
+ * Carrega o perfil do usuário. Dados complementares (plano do paciente, CRM do
+ * dentista) são "melhor esforço": se falharem, o login continua.
+ */
 export async function loadProfile(userId: string): Promise<UserProfile> {
   const sb = requireSupabase();
 
@@ -31,31 +41,27 @@ export async function loadProfile(userId: string): Promise<UserProfile> {
     .from('profiles')
     .select('id, role, full_name, email, phone, cpf')
     .eq('id', userId)
-    .single<ProfileRow>();
+    .maybeSingle<ProfileRow>();
 
   if (error) throw error;
+  if (!profile) {
+    throw new Error(
+      'Seu perfil não foi encontrado no banco de dados. Fale com a clínica para regularizar o cadastro.',
+    );
+  }
 
-  let insurance: PatientInsuranceRow | null = null;
-  let doctor: DoctorRow | null = null;
-
-  if (profile.role === 'PATIENT') {
-    const { data } = await sb
-      .from('patient_insurances')
-      .select('card_number, status, insurance:health_insurances(name)')
-      .eq('patient_id', userId)
-      .eq('status', 'ACTIVE')
-      .limit(1)
-      .maybeSingle<PatientInsuranceRow>();
-    insurance = data;
-  } else if (profile.role === 'DOCTOR') {
-    const { data } = await sb
-      .from('doctors')
-      .select(
-        'id, crm, bio, consultation_price, profile:profiles(full_name, is_active), specialty:specialties(name), location:locations(name)',
-      )
-      .eq('id', userId)
-      .maybeSingle<DoctorRow>();
-    doctor = data;
+  let insurance: PatientInsuranceRpcRow | null = null;
+  let doctor: DoctorRpcRow | null = null;
+  try {
+    if (profile.role === 'PATIENT') {
+      const list = await callRpc<PatientInsuranceRpcRow[] | null>('list_patient_insurances');
+      insurance = (list ?? []).find((i) => i.status === 'ACTIVE') ?? null;
+    } else if (profile.role === 'DOCTOR') {
+      const list = await callRpc<DoctorRpcRow[] | null>('list_doctors');
+      doctor = (list ?? []).find((d) => d.id === userId) ?? null;
+    }
+  } catch (extrasError) {
+    console.warn('[kaukamed] dados complementares do perfil indisponíveis:', extrasError);
   }
 
   return profileFromRow(profile, { insurance, doctor });
@@ -81,6 +87,7 @@ export async function signUp(
     email: input.email.trim(),
     password: input.password,
     options: {
+      emailRedirectTo: appUrl(),
       data: {
         full_name: input.fullName.trim(),
         cpf: input.cpf?.trim() || null,
@@ -102,8 +109,14 @@ export async function signOut(): Promise<void> {
 
 export async function sendPasswordReset(email: string): Promise<void> {
   const { error } = await requireSupabase().auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: window.location.origin + import.meta.env.BASE_URL,
+    redirectTo: appUrl(),
   });
+  if (error) throw error;
+}
+
+/** Define a nova senha do usuário em sessão de recuperação (link do e-mail). */
+export async function updatePassword(password: string): Promise<void> {
+  const { error } = await requireSupabase().auth.updateUser({ password });
   if (error) throw error;
 }
 

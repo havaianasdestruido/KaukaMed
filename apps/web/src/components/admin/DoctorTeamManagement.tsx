@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { DemoNotice } from '../common/DemoNotice';
+import { formatBRL } from '../../lib/format';
 
 export const DoctorTeamManagement: React.FC = () => {
-  const { doctors, setScreen, setShowNewDoctorModal, addToast } = useApp();
+  const { doctors, setScreen, setShowNewDoctorModal, addToast, dataSource } = useApp();
+  const isRemote = dataSource === 'supabase';
 
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +33,10 @@ export const DoctorTeamManagement: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-6 pb-16">
+      <DemoNotice
+        feature="Indicadores da equipe (KPIs, receita, NPS, comissão)"
+        detail="A lista de profissionais abaixo vem do banco de dados; os indicadores dos cartões e a remuneração/NPS são de exemplo."
+      />
       {/* Header and Top Controls */}
       <div className="flex flex-col gap-2">
         {/* Breadcrumb & System State */}
@@ -47,10 +54,12 @@ export const DoctorTeamManagement: React.FC = () => {
             <span className="text-[#005051] dark:text-[#84d4d4] font-bold">Dentistas & Equipe</span>
           </nav>
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#005051] dark:bg-[#84d4d4] animate-ping"></span>
-            <span>Sincronização Ativa CFO / CRO-SP • Atualizado há 12 min</span>
-          </div>
+          {!isRemote && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#005051] dark:bg-[#84d4d4] animate-ping"></span>
+              <span>Sincronização Ativa CFO / CRO-SP • Atualizado há 12 min</span>
+            </div>
+          )}
         </div>
 
         {/* Title & Action CTAs */}
@@ -116,7 +125,7 @@ export const DoctorTeamManagement: React.FC = () => {
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#161d1d] dark:text-white font-mono">
-                {doctors.length + 18}
+                {isRemote ? doctors.length : doctors.length + 18}
               </span>
               <span className="text-xs text-[#005051] dark:text-[#84d4d4] font-bold">
                 +2 no trimestre
@@ -368,7 +377,16 @@ export const DoctorTeamManagement: React.FC = () => {
                   </td>
 
                   <td className="py-3 px-3">
-                    {doc.monthlyRevenue > 0 ? (
+                    {isRemote ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {doc.consultationPrice !== undefined
+                            ? formatBRL(doc.consultationPrice)
+                            : '—'}
+                        </span>
+                        <span className="text-[10px] text-[#6e7979]">consulta particular</span>
+                      </div>
+                    ) : doc.monthlyRevenue > 0 ? (
                       <div className="flex flex-col">
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-[#005051] dark:text-[#84d4d4]">
@@ -394,13 +412,19 @@ export const DoctorTeamManagement: React.FC = () => {
                   </td>
 
                   <td className="py-3 px-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[16px] text-amber-500">
-                        star
-                      </span>
-                      <span className="font-bold font-mono">{doc.npsScore.toFixed(1)}</span>
-                      <span className="text-[11px] text-[#6e7979]">(NPS {doc.npsPercentage}%)</span>
-                    </div>
+                    {isRemote ? (
+                      <span className="text-[#6e7979]">—</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-amber-500">
+                          star
+                        </span>
+                        <span className="font-bold font-mono">{doc.npsScore.toFixed(1)}</span>
+                        <span className="text-[11px] text-[#6e7979]">
+                          (NPS {doc.npsPercentage}%)
+                        </span>
+                      </div>
+                    )}
                   </td>
 
                   <td className="py-3 px-3">

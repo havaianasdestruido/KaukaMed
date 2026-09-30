@@ -1,649 +1,738 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { APPOINTMENT_TYPE_LABELS, APPOINTMENT_TYPES, type AppointmentType } from '@kaukamed/shared';
 import { useApp } from '../../context/AppContext';
-import { ASSETS } from '../../data/mockData';
+import { SlotPicker } from '../common/SlotPicker';
+import { formatDateTime, todayKey } from '../../lib/clinicTime';
+import { formatBRL } from '../../lib/format';
+import { normalizeText, matchesSpecialty } from '../../lib/text';
+import { toErrorMessage } from '../../lib/supabase';
+import { type AvailableSlot } from '../../services/gateway';
+import { type Doctor, type PatientInsurance, type PatientSummary } from '../../types';
 
+/** Urgência não se marca pelo portal: o paciente liga para a clínica. */
+const PATIENT_TYPES: readonly AppointmentType[] = [
+  'FIRST_VISIT',
+  'FOLLOW_UP',
+  'RETURN',
+  'TELEMEDICINE',
+];
+
+/**
+ * Agendamento de consulta.
+ *
+ * - Paciente: escolhe profissional, dia e horário e agenda para si mesmo.
+ * - Recepção/administrador: escolhem primeiro o paciente e agendam em nome dele.
+ *
+ * Os horários vêm da grade real do dentista (`get_available_days/slots`) e o banco
+ * revalida tudo na hora de gravar (`book_appointment`): o front-end nunca decide
+ * preço, status, local nem se o horário está livre.
+ */
 export const AppointmentBooking: React.FC = () => {
-  const { setScreen, addAppointment, addToast } = useApp();
+  const {
+    currentUser,
+    gateway,
+    myInsurances,
+    bookingSpecialty,
+    setBookingSpecialty,
+    bookingPatient,
+    setBookingPatient,
+    bookAppointment,
+    setScreen,
+    addToast,
+  } = useApp();
 
-  const [modality, setModality] = useState<'presencial' | 'teleorientacao'>('presencial');
-  const [selectedDay, setSelectedDay] = useState<{ day: string; num: number; dateString: string }>({
-    day: 'Qui',
-    num: 24,
-    dateString: 'Quinta-feira, 24 de Outubro de 2024',
-  });
-  const [selectedTime, setSelectedTime] = useState<string>('14:30');
-  const [symptoms, setSymptoms] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const isStaff = currentUser.role === 'funcionario' || currentUser.role === 'administrador';
 
-  const days = [
-    {
-      day: 'Seg',
-      num: 21,
-      spots: '4 vagas',
-      disabled: false,
-      dateString: 'Segunda-feira, 21 de Outubro de 2024',
-    },
-    {
-      day: 'Ter',
-      num: 22,
-      spots: '6 vagas',
-      disabled: false,
-      dateString: 'Terça-feira, 22 de Outubro de 2024',
-    },
-    {
-      day: 'Qua',
-      num: 23,
-      spots: '2 vagas',
-      disabled: false,
-      dateString: 'Quarta-feira, 23 de Outubro de 2024',
-    },
-    {
-      day: 'Qui',
-      num: 24,
-      spots: '8 livres',
-      disabled: false,
-      dateString: 'Quinta-feira, 24 de Outubro de 2024',
-    },
-    {
-      day: 'Sex',
-      num: 25,
-      spots: '5 vagas',
-      disabled: false,
-      dateString: 'Sexta-feira, 25 de Outubro de 2024',
-    },
-    {
-      day: 'Sáb',
-      num: 26,
-      spots: 'Lotado',
-      disabled: true,
-      dateString: 'Sábado, 26 de Outubro de 2024',
-    },
-  ];
+  // ---- profissionais -------------------------------------------------------
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+  const [doctorsError, setDoctorsError] = useState<string | null>(null);
+  const [reloadDoctors, setReloadDoctors] = useState(0);
+  const [specialty, setSpecialty] = useState<string | null>(bookingSpecialty);
+  const [doctorId, setDoctorId] = useState<string | null>(null);
 
-  const morningSlots = [
-    { time: '08:30', available: true },
-    { time: '09:15', available: false },
-    { time: '10:00', available: true },
-    { time: '10:45', available: true },
-    { time: '11:30', available: true },
-  ];
+  // ---- horário -------------------------------------------------------------
+  const [startsAt, setStartsAt] = useState<string | null>(null);
+  const [slot, setSlot] = useState<AvailableSlot | null>(null);
+  const [slotRefresh, setSlotRefresh] = useState(0);
 
-  const afternoonSlots = [
-    { time: '14:00', available: true },
-    { time: '14:30', available: true },
-    { time: '15:15', available: true },
-    { time: '16:00', available: true },
-    { time: '17:00', available: true },
-  ];
+  // ---- detalhes ------------------------------------------------------------
+  const [type, setType] = useState<AppointmentType>('FIRST_VISIT');
+  const [insuranceId, setInsuranceId] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const eveningSlots = [
-    { time: '18:00', available: true },
-    { time: '18:45', available: true },
-  ];
+  // ---- paciente (somente recepção) ----------------------------------------
+  const [patientQuery, setPatientQuery] = useState('');
+  const [patientResults, setPatientResults] = useState<PatientSummary[]>([]);
+  const [patientsError, setPatientsError] = useState<string | null>(null);
+  const [patient, setPatient] = useState<PatientSummary | null>(bookingPatient);
+  const [patientInsurances, setPatientInsurances] = useState<PatientInsurance[]>([]);
 
-  const handleConfirmAppointment = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
-    try {
-      await addAppointment({
-        date: selectedDay.dateString,
-        time: selectedTime,
-        doctorName: 'Dr. Marcelo Arantes',
-        doctorSpecialty: 'Ortodontia & Alinhadores',
-        doctorCro: 'CRO/SP 89.412',
-        doctorAvatar: ASSETS.drMarcelo,
-        room: 'Consultório 03 - Unidade Jardins',
-        unit: 'OdontoAura Unidade Jardins',
-        procedure: 'Avaliação & Manutenção Ortodôntica',
-        insuranceName: 'Unimed Odonto Master Gold',
-        insuranceCoverage: '100% Coberto',
-        copayAmount: 0,
-        notes: symptoms || 'Agendamento direto pelo portal do paciente',
-        modality,
+  // O paciente pré-selecionado só vale para esta abertura da tela.
+  useEffect(() => {
+    if (bookingPatient) setBookingPatient(null);
+  }, [bookingPatient, setBookingPatient]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingDoctors(true);
+    setDoctorsError(null);
+    gateway
+      .listDoctors()
+      .then((list) => {
+        if (!cancelled) setDoctors(list.filter((d) => d.isActive !== false));
+      })
+      .catch((e: unknown) => {
+        if (!cancelled)
+          setDoctorsError(toErrorMessage(e, 'Não foi possível carregar os profissionais.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDoctors(false);
       });
-      setScreen('consultas');
-    } catch {
-      // O contexto já informa o erro; o paciente permanece na tela de agendamento.
-    } finally {
-      setIsSaving(false);
+    return () => {
+      cancelled = true;
+    };
+  }, [gateway, reloadDoctors]);
+
+  // Busca de pacientes (recepção), com um pequeno atraso enquanto digita.
+  useEffect(() => {
+    if (!isStaff) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      gateway
+        .listPatients(patientQuery)
+        .then((list) => {
+          if (cancelled) return;
+          setPatientResults(list.slice(0, 6));
+          setPatientsError(null);
+        })
+        .catch((e: unknown) => {
+          if (!cancelled) setPatientsError(toErrorMessage(e, 'Não foi possível buscar pacientes.'));
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [gateway, isStaff, patientQuery]);
+
+  // Convênios do paciente escolhido pela recepção.
+  useEffect(() => {
+    if (!isStaff) return;
+    setInsuranceId(null);
+    if (!patient) {
+      setPatientInsurances([]);
+      return;
+    }
+    let cancelled = false;
+    gateway
+      .listPatientInsurances(patient.id)
+      .then((list) => {
+        if (!cancelled) setPatientInsurances(list);
+      })
+      .catch(() => {
+        if (!cancelled) setPatientInsurances([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gateway, isStaff, patient]);
+
+  const insurances = isStaff ? patientInsurances : myInsurances;
+  const today = todayKey();
+  const usable = (plan: PatientInsurance) =>
+    plan.status === 'ACTIVE' && (!plan.validUntil || plan.validUntil >= today);
+
+  // Conjunto de especialidades oferecidas (chips de filtro).
+  const specialties = useMemo(
+    () =>
+      [...new Set(doctors.flatMap((d) => d.specialties))].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
+    [doctors],
+  );
+
+  const filteredDoctors = useMemo(() => {
+    if (!specialty) return doctors;
+    const list = doctors.filter((d) => matchesSpecialty(d.specialties, specialty));
+    return list;
+  }, [doctors, specialty]);
+
+  const presetHasNoDoctor =
+    Boolean(specialty) && filteredDoctors.length === 0 && doctors.length > 0;
+  const visibleDoctors = presetHasNoDoctor ? doctors : filteredDoctors;
+
+  const doctor = doctors.find((d) => d.id === doctorId) ?? null;
+  const selectedInsurance = insurances.find((i) => i.id === insuranceId) ?? null;
+
+  const durationMinutes = slot
+    ? Math.round((new Date(slot.end).getTime() - new Date(slot.start).getTime()) / 60000)
+    : null;
+
+  const patientReady = !isStaff || patient !== null;
+  const canConfirm = patientReady && doctor !== null && startsAt !== null && !saving;
+
+  const step = !patientReady || !doctor ? 1 : !startsAt ? 2 : 3;
+
+  const pickDoctor = (id: string) => {
+    setDoctorId(id);
+    setStartsAt(null);
+    setSlot(null);
+  };
+
+  const handleConfirm = async () => {
+    if (!canConfirm || !doctor || !startsAt) return;
+    setSaving(true);
+    const ok = await bookAppointment({
+      doctorId: doctor.id,
+      startsAt,
+      type,
+      insuranceId: selectedInsurance && usable(selectedInsurance) ? selectedInsurance.id : null,
+      notes,
+      patientId: isStaff ? patient?.id : undefined,
+    });
+    setSaving(false);
+
+    if (ok) {
+      setBookingSpecialty(null);
+      setScreen(isStaff ? 'admin-agenda' : 'consultas');
+    } else {
+      // Quase sempre: alguém reservou o horário antes. Recarrega a grade.
+      setStartsAt(null);
+      setSlot(null);
+      setSlotRefresh((n) => n + 1);
     }
   };
 
+  const steps = [
+    { n: 1, title: isStaff ? 'Paciente & Profissional' : 'Profissional' },
+    { n: 2, title: 'Data e Horário' },
+    { n: 3, title: 'Confirmação & Cobertura' },
+  ];
+
   return (
-    <div className="flex flex-col w-full pb-16">
-      {/* Breadcrumb & Header Section */}
-      <header className="flex flex-col gap-1 mb-6">
+    <div className="flex w-full flex-col pb-16">
+      {/* Cabeçalho */}
+      <header className="mb-6 flex flex-col gap-1">
         <nav
           aria-label="Navegação hierárquica"
           className="flex items-center gap-1 text-xs text-[#6e7979]"
         >
           <button
-            onClick={() => setScreen('inicio-dashboard')}
-            className="hover:text-[#005051] dark:hover:text-[#84d4d4] transition-colors"
+            onClick={() => setScreen(isStaff ? 'admin-agenda' : 'inicio-dashboard')}
+            className="transition-colors hover:text-[#005051] dark:hover:text-[#84d4d4]"
           >
-            Início
+            {isStaff ? 'Agenda' : 'Início'}
           </button>
-          <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-          <span className="text-[#161d1d] dark:text-white font-bold">Agendar Consulta</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px]">
+            chevron_right
+          </span>
+          <span className="font-bold text-[#161d1d] dark:text-white">Agendar Consulta</span>
         </nav>
-
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 mt-1">
+        <div className="mt-1 flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
-            <h1 className="text-2xl sm:text-3xl text-[#161d1d] dark:text-white font-bold tracking-tight">
-              Agendamento de Consulta Odontológica
+            <h1 className="text-2xl font-bold tracking-tight text-[#161d1d] sm:text-3xl dark:text-white">
+              {isStaff ? 'Novo agendamento' : 'Agendamento de Consulta Odontológica'}
             </h1>
-            <p className="text-xs sm:text-sm text-[#3e4949] dark:text-[#bec9c8] mt-1">
-              Selecione a especialidade, profissional e o melhor horário para o seu atendimento
-              clínico humanizado.
+            <p className="mt-1 text-xs text-[#3e4949] sm:text-sm dark:text-[#bec9c8]">
+              {isStaff
+                ? 'Escolha o paciente, o profissional e um horário livre da agenda.'
+                : 'Escolha o profissional e o melhor horário para o seu atendimento.'}
             </p>
-          </div>
-          <div className="flex items-center gap-2 self-start md:self-auto bg-[#e8efee] dark:bg-[#202929] px-3.5 py-1.5 rounded-full shadow-sm">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#005051] dark:bg-[#84d4d4] animate-pulse"></span>
-            <span className="text-xs text-[#3e4949] dark:text-[#bec9c8] font-semibold">
-              Atendimento ativo em São Paulo / SP
-            </span>
           </div>
         </div>
       </header>
 
-      {/* M3 Horizontal Stepper */}
-      <section className="w-full bg-[#eef5f4] dark:bg-[#1a2222] rounded-2xl p-4 mb-6 shadow-sm border border-[#dde4e3]/60 dark:border-[#263131]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 relative">
-          {/* Step 1: Concluído */}
-          <div className="flex items-center gap-2.5 bg-white dark:bg-[#202929] p-3 rounded-xl shadow-sm border border-[#dde4e3]/60 dark:border-[#2d3838]">
-            <div className="w-8 h-8 rounded-full bg-[#005051] dark:bg-[#004f50] flex items-center justify-center text-white shrink-0">
-              <span className="material-symbols-outlined text-[18px]">check</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-[#6e7979] uppercase tracking-wider font-bold">
-                Etapa 1
-              </p>
-              <p className="text-xs text-[#161d1d] dark:text-white font-bold truncate">
-                Especialidade & Motivo
-              </p>
-            </div>
-          </div>
-
-          {/* Step 2: Concluído */}
-          <div className="flex items-center gap-2.5 bg-white dark:bg-[#202929] p-3 rounded-xl shadow-sm border border-[#dde4e3]/60 dark:border-[#2d3838]">
-            <div className="w-8 h-8 rounded-full bg-[#005051] dark:bg-[#004f50] flex items-center justify-center text-white shrink-0">
-              <span className="material-symbols-outlined text-[18px]">check</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-[#6e7979] uppercase tracking-wider font-bold">
-                Etapa 2
-              </p>
-              <p className="text-xs text-[#161d1d] dark:text-white font-bold truncate">
-                Profissional Escolhido
-              </p>
-            </div>
-          </div>
-
-          {/* Step 3: Ativa */}
-          <div className="flex items-center gap-2.5 bg-[#006a6b] dark:bg-[#004f50] p-3 rounded-xl text-white shadow-sm ring-2 ring-[#005051]/30">
-            <div className="w-8 h-8 rounded-full bg-[#a0f0f1] text-[#002020] flex items-center justify-center text-xs font-bold shrink-0">
-              3
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-[#97e7e7] uppercase tracking-wider font-bold">
-                Etapa Atual
-              </p>
-              <p className="text-xs text-white font-bold truncate">Data e Horário</p>
-            </div>
-          </div>
-
-          {/* Step 4: Pendente */}
-          <div className="flex items-center gap-2.5 bg-[#e8efee] dark:bg-[#202929] p-3 rounded-xl opacity-75">
-            <div className="w-8 h-8 rounded-full bg-[#dde4e3] dark:bg-[#263131] text-[#3e4949] dark:text-[#bec9c8] flex items-center justify-center text-xs font-bold shrink-0">
-              4
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-[#6e7979] uppercase tracking-wider font-bold">
-                Pendente
-              </p>
-              <p className="text-xs text-[#3e4949] dark:text-[#bec9c8] truncate">
-                Confirmação & Cobertura
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Main 2-Column Responsive Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: Selection Area (8 Cols) */}
-        <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
-          {/* Selected Professional & Specialty Summary Card */}
-          <div className="bg-[#eef5f4] dark:bg-[#1a2222] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="relative shrink-0">
-                <img
-                  src={ASSETS.drMarcelo}
-                  alt="Dr. Marcelo Arantes"
-                  className="w-16 h-16 rounded-full object-cover shadow-sm ring-2 ring-[#005051]/20"
-                />
-                <span
-                  className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-[#1a2222]"
-                  title="Disponível para agenda"
-                ></span>
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] px-2.5 py-0.5 rounded-full font-bold">
-                    Ortodontia & Alinhadores
-                  </span>
-                  <span className="flex items-center text-amber-600 dark:text-amber-400 text-xs font-bold gap-0.5">
-                    <span className="material-symbols-outlined text-[15px]">star</span>
-                    4.9 <span className="text-[#6e7979] font-normal">(128 avaliações)</span>
-                  </span>
+      {/* Etapas */}
+      <section className="mb-6 w-full rounded-2xl border border-[#dde4e3]/60 bg-[#eef5f4] p-4 shadow-sm dark:border-[#263131] dark:bg-[#1a2222]">
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {steps.map((s) => {
+            const done = s.n < step;
+            const active = s.n === step;
+            return (
+              <li
+                key={s.n}
+                className={`flex items-center gap-2.5 rounded-xl p-3 ${
+                  active
+                    ? 'bg-[#006a6b] text-white shadow-sm ring-2 ring-[#005051]/30 dark:bg-[#004f50]'
+                    : 'border border-[#dde4e3]/60 bg-white shadow-sm dark:border-[#2d3838] dark:bg-[#202929]'
+                } ${!done && !active ? 'opacity-75' : ''}`}
+              >
+                <div
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    done
+                      ? 'bg-[#005051] text-white'
+                      : active
+                        ? 'bg-[#a0f0f1] text-[#002020]'
+                        : 'bg-[#dde4e3] text-[#3e4949] dark:bg-[#263131] dark:text-[#bec9c8]'
+                  }`}
+                >
+                  {done ? (
+                    <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                      check
+                    </span>
+                  ) : (
+                    s.n
+                  )}
                 </div>
-                <h2 className="text-base text-[#161d1d] dark:text-white font-bold mt-1 truncate">
-                  Dr. Marcelo Arantes
-                </h2>
-                <p className="text-xs text-[#3e4949] dark:text-[#bec9c8]">
-                  CRO/SP 89.412 • Unidade Jardins • Consultório 03
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() =>
-                addToast(
-                  'Especialista Dr. Marcelo Arantes é a referência recomendada para seu plano.',
-                  'info',
-                )
-              }
-              className="shrink-0 text-xs text-[#005051] dark:text-[#84d4d4] hover:bg-[#cce8e7]/40 px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 font-bold self-end sm:self-center"
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
-              <span>Alterar</span>
-            </button>
-          </div>
-
-          {/* Attendance Modality Selection */}
-          <div className="flex flex-col gap-2">
-            <h3 className="text-xs text-[#161d1d] dark:text-white font-bold uppercase tracking-wider">
-              Modalidade do Atendimento
-            </h3>
-            <div className="flex flex-wrap gap-3 mt-0.5">
-              <button
-                onClick={() => setModality('presencial')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold shadow-sm transition-all ${
-                  modality === 'presencial'
-                    ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] ring-1 ring-[#005051]/30'
-                    : 'bg-white dark:bg-[#1a2222] text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#eef5f4]'
-                }`}
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[20px]">local_hospital</span>
-                <span>Presencial na Clínica (Unidade Jardins)</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setModality('teleorientacao');
-                  addToast(
-                    'Teleorientação selecionada: link da chamada será enviado por SMS e e-mail.',
-                    'info',
-                  );
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold shadow-sm transition-all ${
-                  modality === 'teleorientacao'
-                    ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] ring-1 ring-[#005051]/30'
-                    : 'bg-white dark:bg-[#1a2222] text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#eef5f4]'
-                }`}
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[20px]">videocam</span>
-                <span>Teleorientação / Pré-avaliação Online</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Weekly / Monthly Date Carousel */}
-          <div className="bg-white dark:bg-[#1a2222] rounded-2xl p-5 shadow-sm flex flex-col gap-4 border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-[#005051] dark:text-[#84d4d4] font-bold uppercase tracking-wider">
-                  Mês Vigente
-                </span>
-                <h3 className="text-base font-bold text-[#161d1d] dark:text-white">
-                  Outubro / Novembro 2024
-                </h3>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  aria-label="Semana anterior"
-                  onClick={() => addToast('Semana anterior: 14 a 19 de Outubro.', 'info')}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-[#6e7979] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors"
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-                </button>
-                <button
-                  aria-label="Próxima semana"
-                  onClick={() =>
-                    addToast('Próxima semana: 28 de Outubro a 02 de Novembro.', 'info')
-                  }
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-[#6e7979] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors"
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Days Selector */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-              {days.map((d) => {
-                const isSelected = selectedDay.num === d.num;
-                return (
-                  <button
-                    key={d.num}
-                    type="button"
-                    disabled={d.disabled}
-                    onClick={() => {
-                      if (!d.disabled) {
-                        setSelectedDay({ day: d.day, num: d.num, dateString: d.dateString });
-                      }
-                    }}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all text-left ${
-                      isSelected
-                        ? 'bg-[#005051] text-white shadow-md scale-105'
-                        : d.disabled
-                          ? 'bg-[#eef5f4] dark:bg-[#202929] opacity-50 cursor-not-allowed text-[#6e7979]'
-                          : 'bg-[#eef5f4] dark:bg-[#202929] hover:bg-[#e2eae9] text-[#161d1d] dark:text-[#e1e8e7]'
+                <div className="min-w-0">
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      active ? 'text-[#97e7e7]' : 'text-[#6e7979]'
                     }`}
                   >
-                    <span
-                      className={`text-xs font-semibold ${isSelected ? 'text-white/80' : 'text-[#6e7979]'}`}
-                    >
-                      {d.day}
-                    </span>
-                    <span className="text-xl font-bold my-0.5">{d.num}</span>
-                    <span
-                      className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-full font-bold ${
-                        isSelected
-                          ? 'bg-[#006a6b] text-[#97e7e7]'
-                          : d.disabled
-                            ? 'text-[#6e7979]'
-                            : 'text-[#005051] dark:text-[#84d4d4]'
-                      }`}
-                    >
-                      {d.spots}
-                    </span>
+                    {done ? 'Concluída' : active ? 'Etapa atual' : `Etapa ${s.n}`}
+                  </p>
+                  <p
+                    className={`truncate text-xs font-bold ${
+                      active ? 'text-white' : 'text-[#161d1d] dark:text-white'
+                    }`}
+                  >
+                    {s.title}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* Coluna de escolhas */}
+        <div className="flex flex-col gap-6 lg:col-span-7 xl:col-span-8">
+          {isStaff && (
+            <section className="flex flex-col gap-3 rounded-2xl border border-[#dde4e3]/60 bg-white p-5 shadow-sm dark:border-[#263131] dark:bg-[#1a2222]">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#161d1d] dark:text-white">
+                Paciente
+              </h2>
+              {patient ? (
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#eef5f4] p-4 dark:bg-[#202929]">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-[#161d1d] dark:text-white">
+                      {patient.name}
+                    </p>
+                    <p className="truncate text-xs text-[#6e7979]">
+                      {[patient.cpf, patient.phone].filter(Boolean).join(' • ') ||
+                        'Sem CPF/telefone'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPatient(null)}
+                    className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold text-[#005051] hover:bg-[#cce8e7]/50 dark:text-[#84d4d4]"
+                  >
+                    Trocar
                   </button>
-                );
-              })}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 rounded-full border border-[#dde4e3] bg-[#eef5f4] px-4 py-2 dark:border-[#2d3838] dark:bg-[#202929]">
+                    <span
+                      aria-hidden="true"
+                      className="material-symbols-outlined text-[20px] text-[#6e7979]"
+                    >
+                      search
+                    </span>
+                    <input
+                      className="w-full border-0 bg-transparent text-xs text-[#161d1d] outline-none placeholder:text-[#6e7979] dark:text-white"
+                      placeholder="Buscar paciente por nome ou CPF…"
+                      value={patientQuery}
+                      onChange={(e) => setPatientQuery(e.target.value)}
+                      aria-label="Buscar paciente"
+                    />
+                  </div>
+                  {patientsError && <p className="text-xs text-[#93000a]">{patientsError}</p>}
+                  <ul className="flex flex-col gap-1.5">
+                    {patientResults.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => setPatient(p)}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#eef5f4] dark:hover:bg-[#202929]"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-bold text-[#161d1d] dark:text-white">
+                              {p.name}
+                            </span>
+                            <span className="block truncate text-[11px] text-[#6e7979]">
+                              {[p.cpf, p.phone].filter(Boolean).join(' • ') || p.email || '—'}
+                            </span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="material-symbols-outlined text-[18px] text-[#6e7979]"
+                          >
+                            chevron_right
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                    {patientResults.length === 0 && !patientsError && (
+                      <li className="px-3 py-2 text-xs text-[#6e7979]">
+                        Nenhum paciente encontrado.
+                      </li>
+                    )}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+
+          {/* Profissional */}
+          <section className="flex flex-col gap-4 rounded-2xl border border-[#dde4e3]/60 bg-white p-5 shadow-sm dark:border-[#263131] dark:bg-[#1a2222]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#161d1d] dark:text-white">
+                Profissional
+              </h2>
+              {specialty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpecialty(null);
+                    setBookingSpecialty(null);
+                  }}
+                  className="text-[11px] font-bold text-[#005051] hover:underline dark:text-[#84d4d4]"
+                >
+                  Limpar filtro
+                </button>
+              )}
             </div>
-          </div>
 
-          {/* Time Slot Grid Separated by Shift */}
-          <div className="bg-white dark:bg-[#1a2222] rounded-2xl p-5 shadow-sm flex flex-col gap-5 border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center justify-between pb-1">
-              <div>
-                <h3 className="text-base font-bold text-[#161d1d] dark:text-white">
-                  Horários Disponíveis em {selectedDay.num} de Outubro
-                </h3>
-                <p className="text-xs text-[#6e7979]">
-                  Selecione o melhor período do dia para sua consulta.
-                </p>
-              </div>
-
-              {/* Legend */}
-              <div className="hidden sm:flex items-center gap-3 text-xs text-[#6e7979]">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#dde4e3] dark:bg-[#263131]"></span>
-                  <span>Disponível</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#005051] dark:bg-[#84d4d4]"></span>
-                  <span className="font-bold text-[#005051] dark:text-[#84d4d4]">Selecionado</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#bec9c8] opacity-50"></span>
-                  <span>Ocupado</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Morning Shift */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-xs text-[#3e4949] dark:text-[#bec9c8] font-bold">
-                <span className="material-symbols-outlined text-[18px] text-amber-600">
-                  wb_sunny
-                </span>
-                <span>Turno da Manhã (08h às 12h)</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {morningSlots.map((slot) => {
-                  const isSelected = selectedTime === slot.time;
+            {specialties.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {[null, ...specialties].map((name) => {
+                  const selected =
+                    name === null
+                      ? !specialty
+                      : Boolean(specialty) &&
+                        normalizeText(name) === normalizeText(specialty ?? '');
                   return (
                     <button
-                      key={slot.time}
+                      key={name ?? 'todas'}
                       type="button"
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTime(slot.time)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        isSelected
-                          ? 'bg-[#005051] text-white shadow-sm ring-2 ring-[#005051]/20'
-                          : !slot.available
-                            ? 'bg-[#dde4e3] dark:bg-[#202929] text-[#6e7979] line-through cursor-not-allowed'
-                            : 'bg-[#eef5f4] dark:bg-[#202929] text-[#161d1d] dark:text-white hover:bg-[#cce8e7]'
+                      onClick={() => setSpecialty(name)}
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                        selected
+                          ? 'bg-[#005051] text-white shadow-sm'
+                          : 'bg-[#dde4e3] text-[#3e4949] hover:bg-[#cce8e7] dark:bg-[#263131] dark:text-[#bec9c8]'
                       }`}
                     >
-                      {slot.time}
+                      {name ?? 'Todas'}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            )}
 
-            {/* Afternoon Shift */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-xs text-[#3e4949] dark:text-[#bec9c8] font-bold">
-                <span className="material-symbols-outlined text-[18px] text-[#005051] dark:text-[#84d4d4]">
-                  sunny
+            {presetHasNoDoctor && (
+              <p className="rounded-xl bg-[#fff0c2] p-3 text-xs text-[#6b5200]">
+                Nenhum profissional de “{specialty}” atende no momento. Mostrando todos.
+              </p>
+            )}
+
+            {loadingDoctors ? (
+              <p className="flex items-center gap-2 text-xs text-[#6e7979]">
+                <span
+                  aria-hidden="true"
+                  className="material-symbols-outlined animate-spin text-[18px]"
+                >
+                  progress_activity
                 </span>
-                <span>Turno da Tarde (13h às 18h)</span>
+                Carregando profissionais…
+              </p>
+            ) : doctorsError ? (
+              <div className="flex flex-col items-start gap-2 rounded-2xl bg-[#ffdad6]/60 p-4 text-xs text-[#93000a]">
+                <span>{doctorsError}</span>
+                <button
+                  type="button"
+                  onClick={() => setReloadDoctors((n) => n + 1)}
+                  className="rounded-full bg-white px-3 py-1.5 font-semibold shadow-sm"
+                >
+                  Tentar novamente
+                </button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {afternoonSlots.map((slot) => {
-                  const isSelected = selectedTime === slot.time;
+            ) : visibleDoctors.length === 0 ? (
+              <p className="text-xs text-[#6e7979]">Nenhum profissional cadastrado ainda.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {visibleDoctors.map((d) => {
+                  const selected = d.id === doctorId;
                   return (
                     <button
-                      key={slot.time}
+                      key={d.id}
                       type="button"
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTime(slot.time)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        isSelected
-                          ? 'bg-[#005051] text-white shadow-sm ring-2 ring-[#005051]/20 flex items-center gap-1.5'
-                          : !slot.available
-                            ? 'bg-[#dde4e3] dark:bg-[#202929] text-[#6e7979] line-through cursor-not-allowed'
-                            : 'bg-[#eef5f4] dark:bg-[#202929] text-[#161d1d] dark:text-white hover:bg-[#cce8e7]'
+                      onClick={() => pickDoctor(d.id)}
+                      aria-pressed={selected}
+                      className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
+                        selected
+                          ? 'border-[#005051] bg-[#cce8e7]/50 shadow-sm ring-2 ring-[#005051]/20 dark:bg-[#324b4b]/40'
+                          : 'border-[#dde4e3]/70 bg-[#eef5f4] hover:bg-[#e2eae9] dark:border-[#2d3838] dark:bg-[#202929]'
                       }`}
                     >
-                      {isSelected && (
-                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                      <img
+                        src={d.avatar}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-full object-cover shadow-sm"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold text-[#161d1d] dark:text-white">
+                          {d.name}
+                        </span>
+                        <span className="block truncate text-[11px] text-[#6e7979]">{d.cro}</span>
+                        <span className="mt-1 block text-[11px] font-semibold text-[#005051] dark:text-[#84d4d4]">
+                          {d.specialties.join(' • ')}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-[#3e4949] dark:text-[#bec9c8]">
+                          {d.schedule}
+                          {d.consultationPrice !== undefined
+                            ? ` • ${formatBRL(d.consultationPrice)}`
+                            : ''}
+                        </span>
+                      </span>
+                      {selected && (
+                        <span
+                          aria-hidden="true"
+                          className="material-symbols-outlined text-[22px] text-[#005051] dark:text-[#84d4d4]"
+                        >
+                          check_circle
+                        </span>
                       )}
-                      <span>{slot.time}</span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            )}
+          </section>
 
-            {/* Evening Shift */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-xs text-[#3e4949] dark:text-[#bec9c8] font-bold">
-                <span className="material-symbols-outlined text-[18px] text-[#334863]">
-                  nights_stay
-                </span>
-                <span>Turno da Noite (18h às 20h)</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {eveningSlots.map((slot) => {
-                  const isSelected = selectedTime === slot.time;
-                  return (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTime(slot.time)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        isSelected
-                          ? 'bg-[#005051] text-white shadow-sm ring-2 ring-[#005051]/20 flex items-center gap-1.5'
-                          : 'bg-[#eef5f4] dark:bg-[#202929] text-[#161d1d] dark:text-white hover:bg-[#cce8e7]'
-                      }`}
-                    >
-                      {isSelected && (
-                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                      )}
-                      <span>{slot.time}</span>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Tipo de atendimento */}
+          <section className="flex flex-col gap-3 rounded-2xl border border-[#dde4e3]/60 bg-white p-5 shadow-sm dark:border-[#263131] dark:bg-[#1a2222]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#161d1d] dark:text-white">
+              Tipo de atendimento
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {APPOINTMENT_TYPES.filter((t) => isStaff || PATIENT_TYPES.includes(t)).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  aria-pressed={type === t}
+                  className={`rounded-full px-4 py-2.5 text-xs font-semibold shadow-sm transition-all ${
+                    type === t
+                      ? 'bg-[#cce8e7] text-[#051f20] ring-1 ring-[#005051]/30 dark:bg-[#324b4b] dark:text-[#a0f0f1]'
+                      : 'bg-[#eef5f4] text-[#3e4949] hover:bg-[#e2eae9] dark:bg-[#202929] dark:text-[#bec9c8]'
+                  }`}
+                >
+                  {APPOINTMENT_TYPE_LABELS[t]}
+                </button>
+              ))}
             </div>
-          </div>
+          </section>
+
+          {/* Data e horário */}
+          <section className="flex flex-col gap-4 rounded-2xl border border-[#dde4e3]/60 bg-white p-5 shadow-sm dark:border-[#263131] dark:bg-[#1a2222]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#161d1d] dark:text-white">
+              Data e horário
+            </h2>
+            {doctor ? (
+              <SlotPicker
+                doctorId={doctor.id}
+                value={startsAt}
+                onChange={(iso, picked) => {
+                  setStartsAt(iso);
+                  setSlot(picked ?? null);
+                }}
+                refreshKey={slotRefresh}
+              />
+            ) : (
+              <p className="rounded-2xl bg-[#eef5f4] p-4 text-xs text-[#3e4949] dark:bg-[#202929] dark:text-[#bec9c8]">
+                Escolha um profissional para ver os horários disponíveis.
+              </p>
+            )}
+          </section>
         </div>
 
-        {/* RIGHT COLUMN: Appointment Summary & Insurance Verification (Sticky) */}
-        <aside className="lg:col-span-5 xl:col-span-4 sticky top-20 flex flex-col gap-4">
-          <div className="bg-white dark:bg-[#1a2222] rounded-2xl p-5 sm:p-6 shadow-md flex flex-col gap-4 border border-[#dde4e3]/60 dark:border-[#263131]">
-            <div className="flex items-center justify-between pb-1 border-b border-[#dde4e3]/50 dark:border-[#263131]">
+        {/* Resumo */}
+        <aside className="sticky top-20 flex flex-col gap-4 lg:col-span-5 xl:col-span-4">
+          <div className="flex flex-col gap-4 rounded-2xl border border-[#dde4e3]/60 bg-white p-5 shadow-md sm:p-6 dark:border-[#263131] dark:bg-[#1a2222]">
+            <div className="flex items-center justify-between border-b border-[#dde4e3]/50 pb-2 dark:border-[#263131]">
               <h2 className="text-base font-bold text-[#161d1d] dark:text-white">
                 Resumo do Atendimento
               </h2>
-              <span className="w-8 h-8 rounded-full bg-[#e8efee] dark:bg-[#202929] flex items-center justify-center text-[#005051] dark:text-[#84d4d4]">
-                <span className="material-symbols-outlined text-[20px]">calendar_today</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8efee] text-[#005051] dark:bg-[#202929] dark:text-[#84d4d4]">
+                <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
+                  calendar_today
+                </span>
               </span>
             </div>
 
-            {/* Clinic & Details Spec */}
-            <div className="flex flex-col gap-3 bg-[#eef5f4] dark:bg-[#202929] p-4 rounded-xl">
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[20px] mt-0.5 shrink-0">
-                  medical_services
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-[#6e7979]">Procedimento</p>
-                  <p className="text-xs font-bold text-[#161d1d] dark:text-white">
-                    Avaliação & Manutenção Ortodôntica
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[20px] mt-0.5 shrink-0">
-                  schedule
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-[#6e7979]">Data e Horário</p>
-                  <p className="text-xs font-bold text-[#161d1d] dark:text-white">
-                    {selectedDay.day}, {selectedDay.num} de Outubro às {selectedTime}
-                  </p>
-                  <p className="text-[11px] text-[#6e7979]">Duração prevista: 45 minutos</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[20px] mt-0.5 shrink-0">
-                  location_on
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] text-[#6e7979]">Local do Atendimento</p>
-                  <p className="text-xs font-bold text-[#161d1d] dark:text-white">
-                    OdontoAura Unidade Jardins
-                  </p>
-                  <p className="text-[11px] text-[#6e7979]">
-                    Av. Paulista, 1578 • 4º andar • Consultório 03
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Insurance Verification Card */}
-            <div className="bg-[#cce8e7]/50 dark:bg-[#324b4b]/40 p-4 rounded-xl flex flex-col gap-1.5 border border-[#cce8e7] dark:border-[#324b4b]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[22px]">
-                    verified_user
+            <dl className="flex flex-col gap-3 rounded-xl bg-[#eef5f4] p-4 dark:bg-[#202929]">
+              <SummaryRow icon="person" label="Paciente">
+                {isStaff ? (patient?.name ?? 'Não escolhido') : currentUser.name}
+              </SummaryRow>
+              <SummaryRow icon="medical_services" label="Profissional">
+                {doctor ? (
+                  <>
+                    {doctor.name}
+                    <span className="block text-[11px] font-normal text-[#6e7979]">
+                      {doctor.specialties[0]} • {doctor.cro}
+                    </span>
+                  </>
+                ) : (
+                  'Não escolhido'
+                )}
+              </SummaryRow>
+              <SummaryRow icon="schedule" label="Data e horário">
+                {startsAt ? (
+                  <>
+                    {formatDateTime(startsAt)}
+                    {durationMinutes ? (
+                      <span className="block text-[11px] font-normal text-[#6e7979]">
+                        Duração prevista: {durationMinutes} minutos
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  'Não escolhido'
+                )}
+              </SummaryRow>
+              <SummaryRow icon="location_on" label="Local">
+                {doctor?.room ?? '—'}
+                {doctor?.locationAddress && (
+                  <span className="block text-[11px] font-normal text-[#6e7979]">
+                    {doctor.locationAddress}
                   </span>
-                  <span className="text-xs font-bold text-[#051f20] dark:text-[#a0f0f1]">
-                    Unimed Odonto
-                  </span>
-                </div>
-                <span className="text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                  Plano Elegível
-                </span>
-              </div>
-              <p className="text-[11px] text-[#4a6363] dark:text-[#bec9c8]">
-                Plano Master Gold • Cartão nº **** 8820
-              </p>
-              <p className="text-xs text-emerald-900 dark:text-emerald-300 font-medium">
-                Carência cumprida com 100% de cobertura para a consulta.
-              </p>
-              <div className="mt-1 pt-2 border-t border-[#cce8e7]/80 dark:border-[#324b4b] flex items-center justify-between text-xs">
-                <span className="text-[#4a6363] dark:text-[#bec9c8]">Valor particular padrão:</span>
-                <span className="text-[#6e7979] line-through font-mono">R$ 220,00</span>
-              </div>
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-[#161d1d] dark:text-white">Coparticipação estimada:</span>
-                <span className="text-[#005051] dark:text-[#84d4d4] font-extrabold text-sm font-mono">
-                  R$ 0,00
-                </span>
-              </div>
-            </div>
+                )}
+              </SummaryRow>
+            </dl>
 
-            {/* Optional Symptoms Note */}
+            {/* Cobertura */}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-xs font-bold text-[#161d1d] dark:text-white">
+                Forma de atendimento
+              </legend>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#dde4e3] bg-white p-3 text-xs dark:border-[#2d3838] dark:bg-[#202929]">
+                <input
+                  type="radio"
+                  name="cobertura"
+                  checked={insuranceId === null}
+                  onChange={() => setInsuranceId(null)}
+                  className="accent-[#005051]"
+                />
+                <span className="flex-1 font-semibold text-[#161d1d] dark:text-white">
+                  Particular
+                </span>
+                <span className="font-mono text-[#3e4949] dark:text-[#bec9c8]">
+                  {doctor?.consultationPrice !== undefined
+                    ? formatBRL(doctor.consultationPrice)
+                    : '—'}
+                </span>
+              </label>
+              {insurances.map((plan) => {
+                const ok = usable(plan);
+                return (
+                  <label
+                    key={plan.id}
+                    className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${
+                      ok
+                        ? 'cursor-pointer border-[#dde4e3] bg-white dark:border-[#2d3838] dark:bg-[#202929]'
+                        : 'cursor-not-allowed border-dashed border-[#dde4e3] bg-[#f4f7f8] opacity-70 dark:border-[#2d3838] dark:bg-[#1a2222]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="cobertura"
+                      disabled={!ok}
+                      checked={insuranceId === plan.id}
+                      onChange={() => setInsuranceId(plan.id)}
+                      className="accent-[#005051]"
+                    />
+                    <span className="flex-1">
+                      <span className="block font-semibold text-[#161d1d] dark:text-white">
+                        {plan.insuranceName}
+                      </span>
+                      <span className="block text-[11px] text-[#6e7979]">
+                        Carteirinha {plan.cardNumber}
+                        {!ok &&
+                          ` • ${plan.status === 'SUSPENDED' ? 'suspenso' : 'vencido'} — indisponível`}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {insurances.length === 0 && (
+                <p className="text-[11px] text-[#6e7979]">
+                  {isStaff && !patient
+                    ? 'Escolha o paciente para ver os convênios dele.'
+                    : 'Nenhum convênio cadastrado. A recepção cadastra e valida a carteirinha no atendimento.'}
+                </p>
+              )}
+              {selectedInsurance && (
+                <p className="text-[11px] text-[#4a6363] dark:text-[#bec9c8]">
+                  A cobertura do convênio é confirmada pela clínica no atendimento.
+                </p>
+              )}
+            </fieldset>
+
+            {/* Observações */}
             <div className="flex flex-col gap-1">
               <label
-                className="text-xs text-[#161d1d] dark:text-white font-semibold flex items-center justify-between"
+                className="flex items-center justify-between text-xs font-semibold text-[#161d1d] dark:text-white"
                 htmlFor="symptoms"
               >
                 <span>Observações ou sintomas (opcional)</span>
-                <span className="text-[10px] text-[#6e7979]">Máx 200 carac.</span>
+                <span className="text-[10px] font-normal text-[#6e7979]">{notes.length}/200</span>
               </label>
               <textarea
                 id="symptoms"
                 rows={2}
                 maxLength={200}
-                value={symptoms}
-                onChange={(e) => setSymptoms(e.target.value)}
-                className="w-full rounded-xl bg-[#eef5f4] dark:bg-[#202929] p-3 text-xs text-[#161d1d] dark:text-white placeholder:text-[#6e7979] border border-[#dde4e3] dark:border-[#263131] focus:ring-2 focus:ring-[#005051] outline-none transition-all resize-none"
-                placeholder="Ex: sinto ligeiro desconforto na arcada superior direita após troca de elástico..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full resize-none rounded-xl border border-[#dde4e3] bg-[#eef5f4] p-3 text-xs text-[#161d1d] outline-none transition-all placeholder:text-[#6e7979] focus:ring-2 focus:ring-[#005051] dark:border-[#263131] dark:bg-[#202929] dark:text-white"
+                placeholder="Ex.: sinto desconforto ao mastigar do lado direito…"
               />
             </div>
 
-            {/* Bottom Actions */}
             <div className="flex flex-col gap-2 pt-1">
               <button
                 type="button"
-                onClick={handleConfirmAppointment}
-                disabled={isSaving}
-                className="w-full h-12 rounded-full bg-[#005051] hover:bg-[#006a6b] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                onClick={() => void handleConfirm()}
+                disabled={!canConfirm}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#005051] text-xs font-bold text-white shadow-md transition-all hover:bg-[#006a6b] hover:shadow-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
               >
-                <span>{isSaving ? 'Salvando consulta...' : 'Confirmar agendamento'}</span>
-                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                <span>{saving ? 'Salvando consulta…' : 'Confirmar agendamento'}</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
+                  {saving ? 'progress_activity' : 'arrow_forward'}
+                </span>
               </button>
-
+              {!canConfirm && !saving && (
+                <p className="text-center text-[11px] text-[#6e7979]">
+                  {!patientReady
+                    ? 'Escolha o paciente para continuar.'
+                    : !doctor
+                      ? 'Escolha o profissional para continuar.'
+                      : 'Escolha um horário para continuar.'}
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => setScreen('inicio-dashboard')}
-                className="w-full h-10 rounded-full bg-transparent hover:bg-[#eef5f4] dark:hover:bg-[#202929] text-[#6e7979] text-xs font-semibold transition-colors"
+                onClick={() => {
+                  setBookingSpecialty(null);
+                  addToast('Agendamento cancelado.', 'info');
+                  setScreen(isStaff ? 'admin-agenda' : 'inicio-dashboard');
+                }}
+                className="h-10 w-full rounded-full bg-transparent text-xs font-semibold text-[#6e7979] transition-colors hover:bg-[#eef5f4] dark:hover:bg-[#202929]"
               >
-                Voltar à etapa anterior
+                Cancelar
               </button>
             </div>
 
-            {/* Micro Assurance Info */}
-            <div className="flex items-center justify-center gap-1.5 text-[#6e7979] text-[11px] text-center">
-              <span className="material-symbols-outlined text-[16px]">lock</span>
-              <span>Cancelamento gratuito até 24h antes do horário.</span>
+            <div className="flex items-start justify-center gap-1.5 text-center text-[11px] text-[#6e7979]">
+              <span aria-hidden="true" className="material-symbols-outlined text-[16px]">
+                lock
+              </span>
+              <span>Cancelamento e remarcação pelo portal até 2 horas antes do horário.</span>
             </div>
           </div>
         </aside>
@@ -651,3 +740,22 @@ export const AppointmentBooking: React.FC = () => {
     </div>
   );
 };
+
+const SummaryRow: React.FC<{ icon: string; label: string; children: React.ReactNode }> = ({
+  icon,
+  label,
+  children,
+}) => (
+  <div className="flex items-start gap-3">
+    <span
+      aria-hidden="true"
+      className="material-symbols-outlined mt-0.5 shrink-0 text-[20px] text-[#005051] dark:text-[#84d4d4]"
+    >
+      {icon}
+    </span>
+    <div className="min-w-0">
+      <dt className="text-[11px] text-[#6e7979]">{label}</dt>
+      <dd className="text-xs font-bold text-[#161d1d] dark:text-white">{children}</dd>
+    </div>
+  </div>
+);

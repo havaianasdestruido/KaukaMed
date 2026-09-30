@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
+import { DemoNotice } from '../common/DemoNotice';
 
 export const AdminDashboard: React.FC = () => {
   const { setScreen, rooms, setShowNewDoctorModal, addToast } = useApp();
@@ -10,6 +11,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full gap-6 pb-16">
+      <DemoNotice feature="Indicadores gerenciais" />
       {/* CABEÇALHO DO DASHBOARD / FILTRO EXECUTIVO */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">

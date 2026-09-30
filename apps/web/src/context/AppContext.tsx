@@ -1,33 +1,55 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type ScreenId,
   type UserRole,
   type UserProfile,
   type Appointment,
   type Doctor,
+  type PatientInsurance,
+  type PatientSummary,
   type TissGuide,
   type ClinicRoom,
   type ToothRecord,
 } from '../types';
 import {
   MOCK_PROFILES,
-  INITIAL_APPOINTMENTS,
   INITIAL_DOCTORS,
   INITIAL_TISS_GUIDES,
   CLINIC_ROOMS,
   INITIAL_ODONTOGRAM,
 } from '../data/mockData';
 import { activeDataSource, reportDataSource, type DataSource } from '../lib/env';
-import { supabase, toErrorMessage } from '../lib/supabase';
+import { canAccess, homeFor } from '../lib/access';
+import { ACTION_TARGET_STATUS, type AppointmentAction } from '../lib/appointmentRules';
+import { openedFromRecoveryLink, supabase, toErrorMessage } from '../lib/supabase';
 import * as authService from '../services/auth';
-import * as appointmentService from '../services/appointments';
-import * as doctorService from '../services/doctors';
+import { type BookInput, type Gateway } from '../services/gateway';
+import { createLocalGateway } from '../services/localGateway';
+import { remoteGateway } from '../services/remoteGateway';
 
 interface ToastItem {
   id: string;
   message: string;
   type: 'success' | 'info' | 'error';
 }
+
+type StatusAction = Exclude<AppointmentAction, 'reschedule'>;
+
+const ACTION_SUCCESS_MESSAGE: Record<StatusAction, string> = {
+  confirm: 'Consulta confirmada.',
+  start: 'Atendimento iniciado.',
+  complete: 'Atendimento concluído.',
+  cancel: 'Consulta cancelada.',
+  no_show: 'Falta registrada.',
+};
 
 interface AppContextType {
   currentScreen: ScreenId;
@@ -36,8 +58,12 @@ interface AppContextType {
   setUserRole: (role: UserRole) => void;
   isDark: boolean;
   toggleTheme: () => void;
+  /** Consultas do paciente logado (para dentista e recepção, a tela de Agenda consulta direto). */
   appointments: Appointment[];
+  /** Corpo clínico (tela de equipe). Para agendar, use `gateway.listDoctors()`. */
   doctors: Doctor[];
+  /** Convênios do paciente logado. */
+  myInsurances: PatientInsurance[];
   tissGuides: TissGuide[];
   rooms: ClinicRoom[];
   odontogram: ToothRecord[];
@@ -59,10 +85,23 @@ interface AppContextType {
   addToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   removeToast: (id: string) => void;
 
-  // Actions
-  addAppointment: (apt: Partial<Appointment>) => Promise<void>;
-  rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
-  cancelAppointment: (id: string) => void;
+  // Agenda
+  /** Acesso a dados da agenda (Supabase ou demonstração). */
+  gateway: Gateway;
+  /** Sobe a cada alteração de dados — telas com consulta própria recarregam quando muda. */
+  dataVersion: number;
+  /** Especialidade pré-selecionada ao abrir o agendamento (vem do painel do paciente). */
+  bookingSpecialty: string | null;
+  setBookingSpecialty: (specialty: string | null) => void;
+  /** Paciente pré-selecionado ao abrir o agendamento pela recepção (vem da lista de pacientes). */
+  bookingPatient: PatientSummary | null;
+  setBookingPatient: (patient: PatientSummary | null) => void;
+  /** Cada ação devolve `true` se deu certo (o erro, se houver, já é mostrado em um aviso). */
+  bookAppointment: (input: BookInput) => Promise<boolean>;
+  rescheduleAppointment: (id: string, newStartIso: string) => Promise<boolean>;
+  changeAppointmentStatus: (id: string, action: StatusAction, reason?: string) => Promise<boolean>;
+
+  // Faturamento / equipe (ainda dados de exemplo)
   transmitTissBatch: (batchId: string) => void;
   resolveGlosa: (guideId: string, showToast?: boolean) => void;
   convertToPrivate: (guideId: string, showToast?: boolean) => void;
@@ -74,10 +113,13 @@ interface AppContextType {
   /** `true` enquanto a sessão persistida do Supabase está sendo restaurada. */
   isAuthLoading: boolean;
   isAuthenticated: boolean;
+  /** `true` quando o usuário chegou pelo link de recuperação e precisa definir a nova senha. */
+  isRecoveringPassword: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   register: (input: authService.SignUpInput) => Promise<boolean>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
+  completePasswordReset: (password: string) => Promise<boolean>;
   refreshData: () => Promise<void>;
 }
 
@@ -87,20 +129,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isRemote = activeDataSource === 'supabase';
 
   // Com Supabase, o app começa na tela de login até a sessão ser restaurada.
-  const [currentScreen, setScreen] = useState<ScreenId>(isRemote ? 'login' : 'inicio-dashboard');
-  const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_PROFILES.paciente);
+  const [currentScreen, setCurrentScreen] = useState<ScreenId>(
+    isRemote ? 'login' : homeFor('paciente'),
+  );
+  const [currentUser, setCurrentUserState] = useState<UserProfile>(MOCK_PROFILES.paciente!);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(isRemote);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!isRemote);
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState<boolean>(
+    isRemote && openedFromRecoveryLink,
+  );
   const [isDark, setIsDark] = useState<boolean>(false);
 
-  const [appointments, setAppointments] = useState<Appointment[]>(
-    isRemote ? [] : INITIAL_APPOINTMENTS,
-  );
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>(isRemote ? [] : INITIAL_DOCTORS);
+  const [myInsurances, setMyInsurances] = useState<PatientInsurance[]>([]);
+  const [dataVersion, setDataVersion] = useState(0);
+  const [bookingSpecialty, setBookingSpecialty] = useState<string | null>(null);
+  const [bookingPatient, setBookingPatient] = useState<PatientSummary | null>(null);
   const [tissGuides, setTissGuides] = useState<TissGuide[]>(INITIAL_TISS_GUIDES);
   const [rooms] = useState<ClinicRoom[]>(CLINIC_ROOMS);
   const [odontogram] = useState<ToothRecord[]>(INITIAL_ODONTOGRAM);
-  const [selectedTooth, setSelectedTooth] = useState<ToothRecord | null>(INITIAL_ODONTOGRAM[13]); // tooth 24
+  const [selectedTooth, setSelectedTooth] = useState<ToothRecord | null>(INITIAL_ODONTOGRAM[13]!); // tooth 24
 
   const [showRayXModal, setShowRayXModal] = useState<boolean>(false);
   const [showPreConsultationModal, setShowPreConsultationModal] = useState<boolean>(false);
@@ -108,6 +157,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [showNewDoctorModal, setShowNewDoctorModal] = useState<boolean>(false);
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  // O usuário atual também fica numa ref: o gateway local precisa enxergá-lo na hora,
+  // sem esperar a próxima renderização.
+  const userRef = useRef<UserProfile>(currentUser);
+  const setCurrentUser = useCallback((profile: UserProfile) => {
+    userRef.current = profile;
+    setCurrentUserState(profile);
+  }, []);
+
+  const gateway = useMemo<Gateway>(
+    () => (isRemote ? remoteGateway : createLocalGateway(() => userRef.current)),
+    [isRemote],
+  );
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -132,46 +194,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [addToast],
   );
 
+  // Telas de gestão não existem para paciente, e vice-versa (a segurança real é o RLS do banco).
+  const setScreen = useCallback((screen: ScreenId) => {
+    setCurrentScreen(
+      canAccess(userRef.current.role, screen) ? screen : homeFor(userRef.current.role),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && !canAccess(currentUser.role, currentScreen)) {
+      setCurrentScreen(homeFor(currentUser.role));
+    }
+  }, [isAuthenticated, currentUser.role, currentScreen]);
+
   // -------------------------------------------------------------------------
-  // Backend (Supabase): sessão, perfil e carga de dados
+  // Dados: carga inicial e atualização
   // -------------------------------------------------------------------------
 
-  const routeForRole = (role: UserRole): ScreenId => {
-    if (role === 'administrador' || role === 'funcionario') return 'admin-visao-geral';
-    if (role === 'dentista') return 'admin-dentistas';
-    return 'inicio-dashboard';
-  };
+  const refreshData = useCallback(
+    async (profile?: UserProfile) => {
+      const user = profile ?? userRef.current;
+      const isPatient = user.role === 'paciente';
 
-  const refreshData = useCallback(async () => {
-    if (!isRemote) return;
-    const [apts, docs] = await Promise.allSettled([
-      appointmentService.listAppointments(),
-      doctorService.listDoctors(),
-    ]);
-    if (apts.status === 'fulfilled') setAppointments(apts.value);
-    else reportError(apts.reason, 'Não foi possível carregar as consultas.');
-    if (docs.status === 'fulfilled') setDoctors(docs.value);
-    else reportError(docs.reason, 'Não foi possível carregar o corpo clínico.');
-  }, [isRemote, reportError]);
+      const [apts, docs, plans] = await Promise.allSettled([
+        isPatient ? gateway.listAppointments() : Promise.resolve<Appointment[]>([]),
+        isRemote ? gateway.listDoctors() : Promise.resolve<Doctor[]>([]),
+        isPatient ? gateway.listPatientInsurances() : Promise.resolve<PatientInsurance[]>([]),
+      ]);
+
+      if (apts.status === 'fulfilled') setAppointments(apts.value);
+      else reportError(apts.reason, 'Não foi possível carregar as consultas.');
+      if (isRemote) {
+        if (docs.status === 'fulfilled') setDoctors(docs.value);
+        else reportError(docs.reason, 'Não foi possível carregar o corpo clínico.');
+      }
+      if (plans.status === 'fulfilled') setMyInsurances(plans.value);
+      else console.warn('[kaukamed] convênios indisponíveis:', plans.reason);
+
+      setDataVersion((v) => v + 1);
+    },
+    [gateway, isRemote, reportError],
+  );
+
+  // Modo demonstração: não há login, então a carga inicial dos dados acontece na abertura.
+  useEffect(() => {
+    if (!isRemote) void refreshData(userRef.current);
+  }, [isRemote, refreshData]);
 
   /** Aplica um perfil autenticado ao estado do app e carrega os dados dele. */
   const enterSession = useCallback(
     async (profile: UserProfile) => {
       setCurrentUser(profile);
       setIsAuthenticated(true);
-      setScreen(routeForRole(profile.role));
-      await refreshData();
+      setCurrentScreen(homeFor(profile.role));
+      await refreshData(profile);
     },
-    [refreshData],
+    [refreshData, setCurrentUser],
   );
 
   const clearSession = useCallback(() => {
     setIsAuthenticated(false);
+    setIsRecoveringPassword(false);
     setAppointments([]);
     setDoctors([]);
-    setCurrentUser(MOCK_PROFILES.paciente);
-    setScreen('login');
-  }, []);
+    setMyInsurances([]);
+    setCurrentUser(MOCK_PROFILES.paciente!);
+    setCurrentScreen('login');
+  }, [setCurrentUser]);
 
   // Restaura a sessão persistida e acompanha login/logout em outras abas.
   const sessionRestored = useRef(false);
@@ -183,7 +272,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (async () => {
       try {
         const userId = await authService.currentUserId();
-        if (userId) await enterSession(await authService.loadProfile(userId));
+        // No fluxo "esqueci a senha" a sessão existe, mas o app só segue depois da nova senha.
+        if (userId && !openedFromRecoveryLink) {
+          await enterSession(await authService.loadProfile(userId));
+        }
       } catch (error) {
         reportError(error, 'Não foi possível restaurar a sessão.');
       } finally {
@@ -193,9 +285,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') clearSession();
+      if (event === 'PASSWORD_RECOVERY') setIsRecoveringPassword(true);
     });
     return () => data.subscription.unsubscribe();
   }, [enterSession, clearSession, reportError]);
+
+  // -------------------------------------------------------------------------
+  // Autenticação
+  // -------------------------------------------------------------------------
 
   const login = async (email: string, password: string): Promise<boolean> => {
     if (!isRemote) return true;
@@ -216,7 +313,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { profile, needsConfirmation } = await authService.signUp(input);
       if (needsConfirmation || !profile) {
         addToast('Cadastro criado! Confirme o e-mail enviado para poder entrar.', 'info');
-        setScreen('login');
+        setCurrentScreen('login');
         return true;
       }
       await enterSession(profile);
@@ -238,7 +335,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       clearSession();
     } else {
-      setScreen('login');
+      setCurrentScreen('login');
     }
     addToast('Sessão encerrada com sucesso.', 'info');
   };
@@ -260,6 +357,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const completePasswordReset = async (password: string): Promise<boolean> => {
+    try {
+      await authService.updatePassword(password);
+      setIsRecoveringPassword(false);
+      const userId = await authService.currentUserId();
+      if (userId) await enterSession(await authService.loadProfile(userId));
+      addToast('Senha redefinida com sucesso!', 'success');
+      return true;
+    } catch (error) {
+      reportError(error, 'Não foi possível redefinir a senha.');
+      return false;
+    }
+  };
+
   const toggleTheme = () => {
     setIsDark((prev) => {
       const next = !prev;
@@ -272,107 +383,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  /** Só existe no modo demonstração: com o backend real o papel vem de `profiles.role`. */
   const setUserRole = (role: UserRole) => {
     if (isRemote) {
-      // Com backend real o papel vem do banco (profiles.role) e não pode ser
-      // trocado pela interface.
       addToast('O perfil de acesso é definido pela sua conta.', 'info');
       return;
     }
-    const profile = MOCK_PROFILES[role] || MOCK_PROFILES.paciente;
+    const profile = MOCK_PROFILES[role] || MOCK_PROFILES.paciente!;
     setCurrentUser(profile);
+    setIsAuthenticated(true);
+    setCurrentScreen(homeFor(profile.role));
     addToast(`Perfil alterado para ${role.toUpperCase()}: ${profile.name}`, 'info');
-
-    // Route to appropriate view
-    if (role === 'administrador' || role === 'funcionario') {
-      setScreen('admin-visao-geral');
-    } else if (role === 'dentista') {
-      setScreen('admin-dentistas');
-    } else {
-      setScreen('inicio-dashboard');
-    }
+    void refreshData(profile);
   };
 
-  const addAppointment = async (aptData: Partial<Appointment>): Promise<void> => {
-    if (isRemote) {
+  // -------------------------------------------------------------------------
+  // Agenda (mesmas chamadas no modo demonstração e no Supabase)
+  // -------------------------------------------------------------------------
+
+  const runMutation = useCallback(
+    async (task: () => Promise<unknown>, successMessage: string, failureFallback: string) => {
       try {
-        const apt = await appointmentService.createAppointment({
-          patient: currentUser,
-          doctorName: aptData.doctorName,
-          date: aptData.date ?? '',
-          time: aptData.time ?? '',
-          procedure: aptData.procedure,
-          notes: aptData.notes,
-          durationMinutes: aptData.durationMinutes,
-          modality: aptData.modality,
-        });
-        setAppointments((prev) => [apt, ...prev]);
-        addToast('Consulta agendada com sucesso! Protocolo gerado.', 'success');
+        await task();
       } catch (error) {
-        reportError(error, 'Não foi possível agendar a consulta.');
-        throw error;
+        reportError(error, failureFallback);
+        return false;
       }
-      return;
-    }
-    const newApt: Appointment = {
-      id: `apt-${Date.now()}`,
-      date: aptData.date || 'Quinta-feira, 24 de Outubro de 2024',
-      time: aptData.time || '14:30',
-      doctorName: aptData.doctorName || 'Dr. Marcelo Arantes',
-      doctorSpecialty: aptData.doctorSpecialty || 'Ortodontia & Alinhadores',
-      doctorCro: aptData.doctorCro || 'CRO/SP 89.412',
-      doctorAvatar: aptData.doctorAvatar || doctors[0].avatar,
-      room: aptData.room || 'Consultório 03 - Unidade Jardins',
-      unit: aptData.unit || 'OdontoAura Unidade Jardins',
-      procedure: aptData.procedure || 'Avaliação & Manutenção Ortodôntica',
-      status: 'confirmado',
-      insuranceName: aptData.insuranceName || 'Unimed Odonto Master Gold',
-      insuranceCoverage: '100% Coberto',
-      copayAmount: 0,
-      durationMinutes: 45,
-      modality: aptData.modality,
-      notes: aptData.notes,
-    };
-    setAppointments((prev) => [newApt, ...prev]);
-    addToast('Consulta agendada com sucesso! Protocolo gerado.', 'success');
-  };
+      addToast(successMessage, 'success');
+      await refreshData();
+      return true;
+    },
+    [addToast, refreshData, reportError],
+  );
 
-  const rescheduleAppointment = (id: string, newDate: string, newTime: string) => {
-    if (isRemote) {
-      const current = appointments.find((a) => a.id === id);
-      appointmentService
-        .rescheduleAppointment(id, newDate, newTime, current?.durationMinutes)
-        .then((apt) => {
-          setAppointments((prev) => prev.map((a) => (a.id === id ? apt : a)));
-          addToast(`Consulta reagendada com sucesso para ${newDate} às ${newTime}!`, 'success');
-        })
-        .catch((error) => reportError(error, 'Não foi possível reagendar a consulta.'));
-      return;
-    }
-    setAppointments((prev) =>
-      prev.map((apt) => (apt.id === id ? { ...apt, date: newDate, time: newTime } : apt)),
+  const bookAppointment = (input: BookInput) =>
+    runMutation(
+      () => gateway.bookAppointment(input),
+      'Consulta agendada com sucesso!',
+      'Não foi possível agendar a consulta.',
     );
-    addToast(`Consulta reagendada com sucesso para ${newDate} às ${newTime}!`, 'success');
-  };
 
-  const cancelAppointment = (id: string) => {
-    if (isRemote) {
-      appointmentService
-        .cancelAppointment(id)
-        .then(() => {
-          setAppointments((prev) =>
-            prev.map((apt) => (apt.id === id ? { ...apt, status: 'cancelado' } : apt)),
-          );
-          addToast('Consulta cancelada com sucesso sem cobrança de taxa.', 'info');
-        })
-        .catch((error) => reportError(error, 'Não foi possível cancelar a consulta.'));
-      return;
-    }
-    setAppointments((prev) =>
-      prev.map((apt) => (apt.id === id ? { ...apt, status: 'cancelado' } : apt)),
+  const rescheduleAppointment = (id: string, newStartIso: string) =>
+    runMutation(
+      () => gateway.rescheduleAppointment(id, newStartIso),
+      'Consulta remarcada com sucesso!',
+      'Não foi possível remarcar a consulta.',
     );
-    addToast('Consulta cancelada com sucesso sem cobrança de taxa.', 'info');
-  };
+
+  const changeAppointmentStatus = (id: string, action: StatusAction, reason?: string) =>
+    runMutation(
+      () => gateway.setAppointmentStatus(id, ACTION_TARGET_STATUS[action], reason),
+      ACTION_SUCCESS_MESSAGE[action],
+      'Não foi possível alterar a consulta.',
+    );
+
+  // -------------------------------------------------------------------------
+  // Faturamento e equipe (dados de exemplo; ainda sem tabelas no banco)
+  // -------------------------------------------------------------------------
 
   const transmitTissBatch = (batchId: string) => {
     setTissGuides((prev) =>
@@ -448,6 +515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTheme,
         appointments,
         doctors,
+        myInsurances,
         tissGuides,
         rooms,
         odontogram,
@@ -464,9 +532,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toasts,
         addToast,
         removeToast,
-        addAppointment,
+        gateway,
+        dataVersion,
+        bookingSpecialty,
+        setBookingSpecialty,
+        bookingPatient,
+        setBookingPatient,
+        bookAppointment,
         rescheduleAppointment,
-        cancelAppointment,
+        changeAppointmentStatus,
         transmitTissBatch,
         resolveGlosa,
         convertToPrivate,
@@ -474,10 +548,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dataSource: activeDataSource,
         isAuthLoading,
         isAuthenticated,
+        isRecoveringPassword,
         login,
         register,
         logout,
         requestPasswordReset,
+        completePasswordReset,
         refreshData,
       }}
     >

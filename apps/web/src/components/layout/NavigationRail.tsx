@@ -1,186 +1,144 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { ASSETS } from '../../data/mockData';
+import { canAccess, homeFor } from '../../lib/access';
+import { type ScreenId, type UserRole } from '../../types';
+
+/** Itens do menu do portal do paciente (barra lateral estreita). */
+const PATIENT_NAV: {
+  screen: ScreenId;
+  label: string;
+  title: string;
+  icon: string;
+  also?: ScreenId;
+}[] = [
+  { screen: 'inicio-dashboard', label: 'Início', title: 'Início', icon: 'space_dashboard' },
+  {
+    screen: 'consultas',
+    label: 'Consultas',
+    title: 'Consultas',
+    icon: 'calendar_month',
+    also: 'agendar',
+  },
+  {
+    screen: 'prontuario',
+    label: 'Prontuário',
+    title: 'Prontuário Digital & Odontograma',
+    icon: 'clinical_notes',
+  },
+  { screen: 'convenio', label: 'Convênio', title: 'Convênio & Cobertura', icon: 'verified_user' },
+  { screen: 'configuracoes', label: 'Configurações', title: 'Configurações', icon: 'settings' },
+];
+
+/** Itens do menu de gestão; cada papel vê só o que `canAccess` permite. */
+const MANAGEMENT_NAV: { screen: ScreenId; label: string; icon: string }[] = [
+  { screen: 'admin-agenda', label: 'Agenda', icon: 'calendar_month' },
+  { screen: 'agendar', label: 'Novo Agendamento', icon: 'add_task' },
+  { screen: 'admin-pacientes', label: 'Pacientes', icon: 'medical_services' },
+  { screen: 'admin-dentistas', label: 'Dentistas & Equipe', icon: 'badge' },
+  { screen: 'admin-visao-geral', label: 'Visão Geral', icon: 'grid_view' },
+  { screen: 'admin-faturamento', label: 'Faturamento & Convênios', icon: 'payments' },
+  { screen: 'admin-salas', label: 'Salas & Equipamentos', icon: 'meeting_room' },
+  { screen: 'admin-relatorios', label: 'Relatórios & Auditoria', icon: 'query_stats' },
+  { screen: 'admin-configuracoes', label: 'Configurações do Sistema', icon: 'settings' },
+];
+
+const ROLE_BADGE: Record<UserRole, string> = {
+  paciente: 'Paciente',
+  funcionario: 'Perfil Recepção',
+  dentista: 'Perfil Dentista',
+  administrador: 'Perfil Administrativo',
+};
 
 export const NavigationRail: React.FC = () => {
   const { currentScreen, setScreen, currentUser, setUserRole, dataSource } = useApp();
 
-  const isAdminOrStaff =
-    currentUser.role === 'administrador' ||
-    currentUser.role === 'funcionario' ||
-    currentScreen.startsWith('admin-');
-
-  // Patient Navigation Rail (80px wide)
-  if (!isAdminOrStaff) {
+  // Paciente usa a barra estreita; todo o restante da equipe usa o menu de gestão.
+  if (currentUser.role === 'paciente') {
     return (
-      <aside className="fixed left-0 top-0 h-full w-20 bg-[#f4fbfa] dark:bg-[#141b1b] z-50 flex flex-col items-center py-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-r border-[#dde4e3]/50 dark:border-[#263131]">
+      <aside className="fixed left-0 top-0 z-50 flex h-full w-20 flex-col items-center border-r border-[#dde4e3]/50 bg-[#f4fbfa] py-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] dark:border-[#263131] dark:bg-[#141b1b]">
         {/* Brand Monogram */}
         <div
           onClick={() => setScreen('inicio-dashboard')}
-          className="flex flex-col items-center justify-center mb-6 cursor-pointer group"
+          className="group mb-6 flex cursor-pointer flex-col items-center justify-center"
         >
           <img
             src={ASSETS.logo}
             alt="OdontoAura Logo"
             className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
           />
-          <span className="text-[11px] text-[#005051] dark:text-[#84d4d4] font-bold mt-1 tracking-wider">
+          <span className="mt-1 text-[11px] font-bold tracking-wider text-[#005051] dark:text-[#84d4d4]">
             AURA
           </span>
         </div>
 
-        {/* Navigation Destination Links */}
-        <nav className="flex-1 flex flex-col items-center gap-3 w-full px-1">
-          <button
-            onClick={() => setScreen('inicio-dashboard')}
-            className={`group flex flex-col items-center gap-1 w-full transition-colors ${
-              currentScreen === 'inicio-dashboard'
-                ? 'text-[#005051] dark:text-[#84d4d4] font-semibold'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-            title="Início"
-          >
-            <div
-              className={`indicator w-14 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                currentScreen === 'inicio-dashboard'
-                  ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1]'
-                  : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[22px]">space_dashboard</span>
-            </div>
-            <span className="text-[11px] text-center leading-tight">Início</span>
-          </button>
+        <nav className="flex w-full flex-1 flex-col items-center gap-3 px-1">
+          {PATIENT_NAV.map((item) => {
+            const active = currentScreen === item.screen || currentScreen === item.also;
+            return (
+              <button
+                key={item.screen}
+                onClick={() => setScreen(item.screen)}
+                className={`group flex w-full flex-col items-center gap-1 transition-colors ${
+                  active
+                    ? 'font-semibold text-[#005051] dark:text-[#84d4d4]'
+                    : 'text-[#3e4949] hover:text-[#161d1d] dark:text-[#bec9c8] dark:hover:text-white'
+                }`}
+                title={item.title}
+              >
+                <div
+                  className={`indicator flex h-8 w-14 items-center justify-center rounded-full transition-all duration-200 ${
+                    active
+                      ? 'bg-[#cce8e7] text-[#005051] dark:bg-[#324b4b] dark:text-[#a0f0f1]'
+                      : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
+                  }`}
+                >
+                  <span aria-hidden="true" className="material-symbols-outlined text-[22px]">
+                    {item.icon}
+                  </span>
+                </div>
+                <span className="text-center text-[11px] leading-tight">{item.label}</span>
+              </button>
+            );
+          })}
 
-          <button
-            onClick={() => setScreen('consultas')}
-            className={`group flex flex-col items-center gap-1 w-full transition-colors ${
-              currentScreen === 'consultas' || currentScreen === 'agendar'
-                ? 'text-[#005051] dark:text-[#84d4d4] font-semibold'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-            title="Consultas"
-          >
-            <div
-              className={`indicator w-14 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                currentScreen === 'consultas' || currentScreen === 'agendar'
-                  ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1]'
-                  : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[22px]">calendar_month</span>
-            </div>
-            <span className="text-[11px] text-center leading-tight">Consultas</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('prontuario')}
-            className={`group flex flex-col items-center gap-1 w-full transition-colors ${
-              currentScreen === 'prontuario'
-                ? 'text-[#005051] dark:text-[#84d4d4] font-semibold'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-            title="Prontuário Digital & Odontograma"
-          >
-            <div
-              className={`indicator w-14 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                currentScreen === 'prontuario'
-                  ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1]'
-                  : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[22px]">clinical_notes</span>
-            </div>
-            <span className="text-[11px] text-center leading-tight">Prontuário</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('convenio')}
-            className={`group flex flex-col items-center gap-1 w-full transition-colors ${
-              currentScreen === 'convenio'
-                ? 'text-[#005051] dark:text-[#84d4d4] font-semibold'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-            title="Convênio & Cobertura"
-          >
-            <div
-              className={`indicator w-14 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                currentScreen === 'convenio'
-                  ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1]'
-                  : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[22px]">verified_user</span>
-            </div>
-            <span className="text-[11px] text-center leading-tight">Convênio</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('configuracoes')}
-            className={`group flex flex-col items-center gap-1 w-full transition-colors ${
-              currentScreen === 'configuracoes'
-                ? 'text-[#005051] dark:text-[#84d4d4] font-semibold'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-            title="Configurações"
-          >
-            <div
-              className={`indicator w-14 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                currentScreen === 'configuracoes'
-                  ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#005051] dark:text-[#a0f0f1]'
-                  : 'group-hover:bg-[#e2eae9] dark:group-hover:bg-[#202929]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[22px]">settings</span>
-            </div>
-            <span className="text-[11px] text-center leading-tight">Configurações</span>
-          </button>
-
-          {/* Quick link to switch to Admin console */}
+          {/* Atalho de demonstração: trocar de perfil */}
           {dataSource === 'local' && (
-            <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131] w-12 flex justify-center">
+            <div className="mt-2 flex w-12 justify-center border-t border-[#dde4e3] pt-2 dark:border-[#263131]">
               <button
                 onClick={() => setUserRole('administrador')}
-                className="w-10 h-10 rounded-full flex flex-col items-center justify-center text-[#4a6363] hover:text-[#005051] hover:bg-[#eef5f4] dark:hover:bg-[#202929] transition-colors"
+                className="flex h-10 w-10 flex-col items-center justify-center rounded-full text-[#4a6363] transition-colors hover:bg-[#eef5f4] hover:text-[#005051] dark:hover:bg-[#202929]"
                 title="Acessar Gestão Clínica / Admin"
               >
-                <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
+                  admin_panel_settings
+                </span>
               </button>
             </div>
           )}
         </nav>
-
-        {/* Bottom Help Button */}
-        <div className="flex flex-col items-center mt-auto">
-          <button
-            onClick={() => setScreen('configuracoes')}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] transition-colors"
-            title="Suporte & Ajuda"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[20px]">help_outline</span>
-          </button>
-        </div>
       </aside>
     );
   }
 
-  // Admin / Clinical Management Sidebar Drawer (288px wide / 72rem)
+  // Menu de gestão (recepção, dentista, administrador): 288 px no desktop.
+  const items = MANAGEMENT_NAV.filter((item) => canAccess(currentUser.role, item.screen));
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-20 lg:w-72 bg-[#eef5f4] dark:bg-[#141b1b] z-50 flex flex-col justify-between py-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-r border-[#dde4e3]/60 dark:border-[#263131] transition-all">
-      <div className="flex flex-col gap-4">
+    <aside className="fixed left-0 top-0 z-50 flex h-screen w-20 flex-col justify-between border-r border-[#dde4e3]/60 bg-[#eef5f4] py-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] transition-all lg:w-72 dark:border-[#263131] dark:bg-[#141b1b]">
+      <div className="flex flex-col gap-4 overflow-y-auto">
         {/* Brand Header */}
         <div
-          onClick={() => setScreen('admin-visao-geral')}
-          className="flex items-center gap-3 px-4 cursor-pointer group"
+          onClick={() => setScreen(homeFor(currentUser.role))}
+          className="group flex cursor-pointer items-center gap-3 px-4"
         >
           <img
             src={ASSETS.logo}
             alt="OdontoAura Logo"
-            className="h-8 w-auto object-contain flex-shrink-0"
+            className="h-8 w-auto shrink-0 object-contain"
           />
-          <div className="hidden lg:flex flex-col">
-            <span className="text-base text-[#005051] dark:text-[#84d4d4] font-bold tracking-tight">
+          <div className="hidden flex-col lg:flex">
+            <span className="text-base font-bold tracking-tight text-[#005051] dark:text-[#84d4d4]">
               OdontoAura
             </span>
             <span className="text-xs text-[#4a6363] dark:text-[#bec9c8]">
@@ -191,113 +149,47 @@ export const NavigationRail: React.FC = () => {
 
         {/* Role Badge */}
         <div className="px-3 lg:px-4">
-          <div className="bg-[#dde4e3] dark:bg-[#202929] rounded-xl px-3 py-1.5 flex items-center justify-between">
-            <span className="hidden lg:inline text-xs text-[#3e4949] dark:text-[#bec9c8] font-semibold">
-              Perfil Administrativo
+          <div className="flex items-center justify-between rounded-xl bg-[#dde4e3] px-3 py-1.5 dark:bg-[#202929]">
+            <span className="hidden text-xs font-semibold text-[#3e4949] lg:inline dark:text-[#bec9c8]">
+              {ROLE_BADGE[currentUser.role]}
             </span>
-            <span className="h-2 w-2 rounded-full bg-[#005051] dark:bg-[#84d4d4] animate-pulse mx-auto lg:mx-0"></span>
+            <span className="mx-auto h-2 w-2 animate-pulse rounded-full bg-[#005051] lg:mx-0 dark:bg-[#84d4d4]"></span>
           </div>
         </div>
 
-        {/* Admin Navigation Links */}
         <nav className="flex flex-col gap-1 px-2">
-          <button
-            onClick={() => setScreen('admin-visao-geral')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-visao-geral'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">grid_view</span>
-            <span className="hidden lg:inline">Visão Geral</span>
-          </button>
+          {items.map((item) => {
+            const active = currentScreen === item.screen;
+            return (
+              <button
+                key={item.screen}
+                onClick={() => setScreen(item.screen)}
+                title={item.label}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
+                  active
+                    ? 'bg-[#cce8e7] font-semibold text-[#051f20] shadow-sm dark:bg-[#324b4b] dark:text-[#a0f0f1]'
+                    : 'text-[#3e4949] hover:bg-[#e2eae9] hover:text-[#161d1d] dark:text-[#bec9c8] dark:hover:bg-[#202929] dark:hover:text-white'
+                }`}
+              >
+                <span aria-hidden="true" className="material-symbols-outlined shrink-0 text-[20px]">
+                  {item.icon}
+                </span>
+                <span className="hidden lg:inline">{item.label}</span>
+              </button>
+            );
+          })}
 
-          <button
-            onClick={() => setScreen('admin-dentistas')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-dentistas'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">badge</span>
-            <span className="hidden lg:inline">Dentistas & Equipe</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('admin-pacientes')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-pacientes'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">
-              medical_services
-            </span>
-            <span className="hidden lg:inline">Pacientes</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('admin-faturamento')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-faturamento'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">payments</span>
-            <span className="hidden lg:inline">Faturamento & Convênios</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('admin-salas')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-salas'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">
-              meeting_room
-            </span>
-            <span className="hidden lg:inline">Salas & Equipamentos</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('admin-relatorios')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-relatorios'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">query_stats</span>
-            <span className="hidden lg:inline">Relatórios & Auditoria</span>
-          </button>
-
-          <button
-            onClick={() => setScreen('admin-configuracoes')}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              currentScreen === 'admin-configuracoes'
-                ? 'bg-[#cce8e7] dark:bg-[#324b4b] text-[#051f20] dark:text-[#a0f0f1] font-semibold shadow-sm'
-                : 'text-[#3e4949] dark:text-[#bec9c8] hover:bg-[#e2eae9] dark:hover:bg-[#202929] hover:text-[#161d1d] dark:hover:text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px] flex-shrink-0">settings</span>
-            <span className="hidden lg:inline">Configurações do Sistema</span>
-          </button>
-
-          {/* Quick toggle to return to Patient Portal */}
+          {/* Atalho de demonstração: voltar ao portal do paciente */}
           {dataSource === 'local' && (
-            <div className="pt-2 mt-2 border-t border-[#dde4e3] dark:border-[#263131]">
+            <div className="mt-2 border-t border-[#dde4e3] pt-2 dark:border-[#263131]">
               <button
                 onClick={() => setUserRole('paciente')}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#005051] dark:text-[#84d4d4] hover:bg-[#e2eae9] dark:hover:bg-[#202929] rounded-xl transition-colors"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-[#005051] transition-colors hover:bg-[#e2eae9] dark:text-[#84d4d4] dark:hover:bg-[#202929]"
                 title="Abrir Visão do Paciente"
               >
-                <span className="material-symbols-outlined text-[18px]">personal_injury</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
+                  personal_injury
+                </span>
                 <span className="hidden lg:inline">Mudar p/ Portal do Paciente</span>
               </button>
             </div>
@@ -305,17 +197,22 @@ export const NavigationRail: React.FC = () => {
         </nav>
       </div>
 
-      {/* Footer SaaS Server Status */}
-      <div className="px-3 lg:px-4 pt-2">
-        <div className="bg-[#e8efee] dark:bg-[#1a2222] p-3 rounded-2xl flex items-center justify-between border border-[#dde4e3]/60 dark:border-[#263131]">
-          <div className="hidden lg:flex flex-col min-w-0">
-            <span className="text-[11px] text-[#3e4949] dark:text-[#bec9c8]">SaaS Conectado</span>
-            <span className="text-xs text-[#005051] dark:text-[#84d4d4] font-semibold truncate">
-              Servidor Clínico Ativo
+      {/* Situação da conexão */}
+      <div className="px-3 pt-2 lg:px-4">
+        <div className="flex items-center justify-between rounded-2xl border border-[#dde4e3]/60 bg-[#e8efee] p-3 dark:border-[#263131] dark:bg-[#1a2222]">
+          <div className="hidden min-w-0 flex-col lg:flex">
+            <span className="text-[11px] text-[#3e4949] dark:text-[#bec9c8]">
+              {dataSource === 'supabase' ? 'Banco de dados' : 'Modo demonstração'}
+            </span>
+            <span className="truncate text-xs font-semibold text-[#005051] dark:text-[#84d4d4]">
+              {dataSource === 'supabase' ? 'Conectado (Supabase)' : 'Dados de exemplo locais'}
             </span>
           </div>
-          <span className="material-symbols-outlined text-[#005051] dark:text-[#84d4d4] text-[20px] mx-auto lg:mx-0">
-            cloud_done
+          <span
+            aria-hidden="true"
+            className="material-symbols-outlined mx-auto text-[20px] text-[#005051] lg:mx-0 dark:text-[#84d4d4]"
+          >
+            {dataSource === 'supabase' ? 'cloud_done' : 'science'}
           </span>
         </div>
       </div>
