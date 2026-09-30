@@ -21,7 +21,16 @@ export function translateMessage(msg: string): string {
   if (/invalid login credentials/i.test(msg)) return 'E-mail ou senha inválidos.';
   if (/email not confirmed/i.test(msg)) return 'Confirme seu e-mail antes de entrar.';
   if (/user already registered/i.test(msg)) return 'Este e-mail já está cadastrado.';
-  if (/password should be at least/i.test(msg)) return 'A senha deve ter pelo menos 6 caracteres.';
+  // O mínimo é configurável no projeto Supabase: repete o número que o servidor informou.
+  const minLength = /password should be at least (\d+)/i.exec(msg);
+  if (minLength) return `A senha deve ter pelo menos ${minLength[1]} caracteres.`;
+  if (/should be different from the old password/i.test(msg)) {
+    return 'A nova senha deve ser diferente da anterior.';
+  }
+  // Sem sessão para trocar a senha: o link de recuperação expirou ou já foi usado.
+  if (/auth session missing/i.test(msg)) {
+    return 'O link de recuperação expirou ou já foi usado. Volte ao login e peça um novo em "Esqueci minha senha".';
+  }
   if (/weak and easy to guess/i.test(msg)) return 'Senha muito fraca. Escolha outra, mais difícil.';
   if (/signups? not allowed|signup is disabled/i.test(msg)) {
     return 'O cadastro de novos usuários está desativado neste projeto.';

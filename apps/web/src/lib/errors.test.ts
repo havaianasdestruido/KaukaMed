@@ -10,11 +10,23 @@ describe('errors', () => {
     expect(translateMessage('Password should be at least 6 characters.')).toBe(
       'A senha deve ter pelo menos 6 caracteres.',
     );
+    expect(translateMessage('Password should be at least 10 characters.')).toBe(
+      'A senha deve ter pelo menos 10 caracteres.',
+    );
     expect(translateMessage('Email address "x@y" is invalid')).toBe(
       'E-mail inválido. Informe um endereço de e-mail real.',
     );
     expect(translateMessage('email rate limit exceeded')).toContain('Muitas tentativas');
     expect(translateMessage('Signups not allowed for this instance')).toContain('desativado');
+  });
+
+  it('traduz os erros da troca de senha pelo link de recuperação', () => {
+    expect(translateMessage('New password should be different from the old password.')).toBe(
+      'A nova senha deve ser diferente da anterior.',
+    );
+    const expired = translateMessage('Auth session missing!');
+    expect(expired).toContain('link de recuperação expirou');
+    expect(expired).toContain('Esqueci minha senha');
   });
 
   it('explica o "Database error saving new user" (CPF duplicado no trigger)', () => {
