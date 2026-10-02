@@ -31,3 +31,6 @@ yarn-error.log*
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Cache do Docusaurus
+.docusaurus/
