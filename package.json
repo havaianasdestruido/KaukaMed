@@ -32,7 +32,10 @@
     "db:psql": "docker compose exec postgres psql -U kaukamed -d kaukamed",
     "db:redis": "docker compose exec redis redis-cli",
     "postinstall": "npm run build:shared",
-    "prepare": "husky"
+    "prepare": "husky",
+    "docs:dev": "npm run dev --workspace @kaukamed/docs",
+    "docs:build": "npm run build --workspace @kaukamed/docs",
+    "docs:serve": "npm run serve --workspace @kaukamed/docs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

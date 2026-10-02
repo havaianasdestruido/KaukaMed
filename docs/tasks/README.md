@@ -3,7 +3,7 @@
 > **Entrega 4** — SPEC quebrada em tarefas de programação detalhadas, organizadas
 > por módulo e em **ordem de dependência**, para que uma IA (ou a equipe) programe.
 >
-> Fontes: [`SPEC.md`](../../SPEC.md) · [`db/kaukamed_schema.sql`](../../db/kaukamed_schema.sql) · [`TODO.md`](../../TODO.md)
+> Fontes: [`SPEC.md`](https://github.com/havaianasdestruido/KaukaMed/blob/main/SPEC.md) · [`db/kaukamed_schema.sql`](../../db/kaukamed_schema.sql) · [`TODO.md`](https://github.com/havaianasdestruido/KaukaMed/blob/main/TODO.md)
 >
 > ⚠️ **Adaptações da SPEC ao ambiente de hospedagem:** banco no **Supabase**
 > (PostgreSQL gerenciado + Supabase Auth + RLS) e front-end estático no
@@ -15,13 +15,13 @@
 
 ## 👥 Equipe e responsabilidades
 
-| Sigla | Papel | Módulos sob responsabilidade |
-| :---- | :---- | :--------------------------- |
-| **FE** | Front-end (1 pessoa) | 08 (UI/Telas), 09 (Deploy GitHub Pages) |
-| **BE-A** | Back-end A (1 pessoa) | 05 (Agendamentos), 06 (Prontuários), apoio no 04 |
-| **BE-B** | Back-end B (1 pessoa) | 02 (Auth/RBAC), 03 (Perfis), 07 (Convênios) |
-| **DBA** | Banco de Dados (1 pessoa) | 01 (Banco/Supabase), seeds, RLS, apoio ao 10 |
-| Todos | — | 10 (Testes & Qualidade) |
+| Sigla    | Papel                     | Módulos sob responsabilidade                     |
+| :------- | :------------------------ | :----------------------------------------------- |
+| **FE**   | Front-end (1 pessoa)      | 08 (UI/Telas), 09 (Deploy GitHub Pages)          |
+| **BE-A** | Back-end A (1 pessoa)     | 05 (Agendamentos), 06 (Prontuários), apoio no 04 |
+| **BE-B** | Back-end B (1 pessoa)     | 02 (Auth/RBAC), 03 (Perfis), 07 (Convênios)      |
+| **DBA**  | Banco de Dados (1 pessoa) | 01 (Banco/Supabase), seeds, RLS, apoio ao 10     |
+| Todos    | —                         | 10 (Testes & Qualidade)                          |
 
 ---
 
@@ -33,19 +33,19 @@
 02..07 ──► 08-frontend-telas ──► 09-deploy-github-pages ──► 10-testes-qualidade
 ```
 
-| # | Arquivo | Módulo | Responsável | Depende de |
-| :- | :------ | :----- | :---------- | :--------- |
-| 00 | [`00-setup-projeto.md`](./00-setup-projeto.md) | Setup do projeto e ambientes | DBA + FE | — |
-| 01 | [`01-banco-de-dados.md`](./01-banco-de-dados.md) | Banco de dados (Supabase) | **DBA** | 00 |
-| 02 | [`02-autenticacao-rbac.md`](./02-autenticacao-rbac.md) | Autenticação & RBAC | **BE-B** | 01 |
-| 03 | [`03-perfis-usuarios.md`](./03-perfis-usuarios.md) | Perfis de usuários | **BE-B** | 02 |
-| 04 | [`04-medicos-especialidades.md`](./04-medicos-especialidades.md) | Médicos, especialidades e agendas | **BE-A** | 03 |
-| 05 | [`05-agendamentos.md`](./05-agendamentos.md) | Consultas & agendamentos | **BE-A** | 04 |
-| 06 | [`06-prontuarios.md`](./06-prontuarios.md) | Prontuários eletrônicos (EHR) | **BE-A** | 05 |
-| 07 | [`07-convenios.md`](./07-convenios.md) | Planos de saúde & convênios | **BE-B** | 03 |
-| 08 | [`08-frontend-telas.md`](./08-frontend-telas.md) | Front-end — telas e componentes | **FE** | 02–07 |
-| 09 | [`09-deploy-github-pages.md`](./09-deploy-github-pages.md) | Deploy no GitHub Pages | **FE** + DBA | 08 |
-| 10 | [`10-testes-qualidade.md`](./10-testes-qualidade.md) | Testes & qualidade | Todos | 08 |
+| #   | Arquivo                                                          | Módulo                            | Responsável  | Depende de |
+| :-- | :--------------------------------------------------------------- | :-------------------------------- | :----------- | :--------- |
+| 00  | [`00-setup-projeto.md`](./00-setup-projeto.md)                   | Setup do projeto e ambientes      | DBA + FE     | —          |
+| 01  | [`01-banco-de-dados.md`](./01-banco-de-dados.md)                 | Banco de dados (Supabase)         | **DBA**      | 00         |
+| 02  | [`02-autenticacao-rbac.md`](./02-autenticacao-rbac.md)           | Autenticação & RBAC               | **BE-B**     | 01         |
+| 03  | [`03-perfis-usuarios.md`](./03-perfis-usuarios.md)               | Perfis de usuários                | **BE-B**     | 02         |
+| 04  | [`04-medicos-especialidades.md`](./04-medicos-especialidades.md) | Médicos, especialidades e agendas | **BE-A**     | 03         |
+| 05  | [`05-agendamentos.md`](./05-agendamentos.md)                     | Consultas & agendamentos          | **BE-A**     | 04         |
+| 06  | [`06-prontuarios.md`](./06-prontuarios.md)                       | Prontuários eletrônicos (EHR)     | **BE-A**     | 05         |
+| 07  | [`07-convenios.md`](./07-convenios.md)                           | Planos de saúde & convênios       | **BE-B**     | 03         |
+| 08  | [`08-frontend-telas.md`](./08-frontend-telas.md)                 | Front-end — telas e componentes   | **FE**       | 02–07      |
+| 09  | [`09-deploy-github-pages.md`](./09-deploy-github-pages.md)       | Deploy no GitHub Pages            | **FE** + DBA | 08         |
+| 10  | [`10-testes-qualidade.md`](./10-testes-qualidade.md)             | Testes & qualidade                | Todos        | 08         |
 
 ---
 

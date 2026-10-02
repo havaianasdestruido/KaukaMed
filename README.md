@@ -30,6 +30,8 @@ kaukamed/
 │       └── src/config/ # Variáveis públicas do front-end
 ├── packages/
 │   └── shared/         # Tipos e contratos TypeScript compartilhados
+├── apps/docs/          # Portal Docusaurus (configuração, tema e página inicial)
+├── docs/               # Conteúdo técnico e plano de implementação do portal
 ├── docker/
 │   └── postgres/init/  # Scripts de inicialização do PostgreSQL local
 ├── db/
@@ -117,21 +119,23 @@ navegador, então **nunca** coloque segredos nelas.
 
 ## 📜 Scripts disponíveis
 
-| Comando                                   | Descrição                                          |
-| :---------------------------------------- | :------------------------------------------------- |
-| `npm run dev`                             | Sobe API e front-end em modo watch (paralelo)      |
-| `npm run dev:api`                         | Sobe apenas a API NestJS                           |
-| `npm run dev:web`                         | Sobe apenas o front-end Next.js                    |
-| `npm run build`                           | Compila todos os pacotes em ordem de dependência   |
-| `npm run typecheck`                       | Valida os tipos TypeScript de todos os pacotes     |
-| `npm run lint`                            | Executa o ESLint em todos os pacotes               |
-| `npm run lint:fix`                        | Executa o ESLint com correção automática           |
-| `npm run format` / `npm run format:check` | Formata/valida a formatação com Prettier           |
-| `npm run test`                            | Executa os testes de todos os pacotes              |
-| `npm run infra:up` / `npm run infra:down` | Sobe/derruba o Docker Compose (PostgreSQL + Redis) |
-| `npm run infra:logs`                      | Acompanha os logs dos contêineres                  |
-| `npm run infra:reset`                     | Derruba a infraestrutura e apaga os volumes        |
-| `npm run db:psql` / `npm run db:redis`    | Abre o `psql`/`redis-cli` no contêiner             |
+| Comando                                     | Descrição                                           |
+| :------------------------------------------ | :-------------------------------------------------- |
+| `npm run dev`                               | Sobe API e front-end em modo watch (paralelo)       |
+| `npm run dev:api`                           | Sobe apenas a API NestJS                            |
+| `npm run dev:web`                           | Sobe apenas o front-end Next.js                     |
+| `npm run build`                             | Compila todos os pacotes em ordem de dependência    |
+| `npm run typecheck`                         | Valida os tipos TypeScript de todos os pacotes      |
+| `npm run lint`                              | Executa o ESLint em todos os pacotes                |
+| `npm run lint:fix`                          | Executa o ESLint com correção automática            |
+| `npm run format` / `npm run format:check`   | Formata/valida a formatação com Prettier            |
+| `npm run test`                              | Executa os testes de todos os pacotes               |
+| `npm run infra:up` / `npm run infra:down`   | Sobe/derruba o Docker Compose (PostgreSQL + Redis)  |
+| `npm run infra:logs`                        | Acompanha os logs dos contêineres                   |
+| `npm run infra:reset`                       | Derruba a infraestrutura e apaga os volumes         |
+| `npm run db:psql` / `npm run db:redis`      | Abre o `psql`/`redis-cli` no contêiner              |
+| `npm run docs:dev`                          | Sobe o portal Docusaurus em modo de desenvolvimento |
+| `npm run docs:build` / `npm run docs:serve` | Gera/serve o build estático da documentação         |
 
 ## 🐳 Infraestrutura local (Docker Compose)
 
